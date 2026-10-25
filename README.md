@@ -1,30 +1,35 @@
 # Open Learning
 
-Open-source, subject-independent learning app. MIT licensed. Designed for **Bring Your Own Everything**: identity, cloud storage and AI provider.
+**Universal learning app · MIT · Bring Your Own Everything**
 
-## Run locally
+A React/TypeScript browser app for languages, history and more. Organize subjects, create sets, photograph book pages, review suggested entries, write answers in both directions and keep study history.
 
-```bash
+## Quick start
+
+```sh
 npm install
+cp .env.example .env
 npm run dev
 ```
 
-## Current prototype
+See [setup and OAuth instructions](docs/setup.md).
 
-- React + TypeScript + Vite
-- 28 French/German entries from Unité 2 as seed data (review before use)
-- Bidirectional writing practice, two attempts, hints, results and retry round
-- Editable entries, local browser persistence and JSON export
+## Features in v0.2
 
-**Important:** This is a local prototype, not a production cloud application. Photo-to-content AI, Google Drive/OneDrive OAuth and sync, true offline PWA, multiuser accounts, persistent cross-device results, advanced error highlighting, subject-agnostic import and FSRS are not yet implemented.
+- Subject and study-set management with 28 seed entries from French Unité 2
+- Editable entries; import from tab/semicolon-separated text, with review before approval
+- Photo upload + optional AI extraction via a local Node/OpenAI bridge
+- Written-answer practice, two tries with hint, mistake review, and congratulations
+- IndexedDB local saving, manual JSON backup and restore
+- Google Drive appDataFolder and OneDrive app-root connection using OAuth PKCE and user-owned storage
+- Attempts preserved by UUID and merged from cloud during explicit synchronization
 
-## Principles
+## Project state and limits
 
-1. User owns data; support export and provider migration.
-2. Human approval of AI-extracted material before saving.
-3. Keep source documents, reviewed learning items and attempt events separate.
-4. Do not expose API keys in frontend code.
-5. Protect children's data; least-privilege OAuth and minimal data collection.
-6. Keep storage and AI providers behind replaceable interfaces.
+This is an **early development prototype**, not yet production-ready. You must register your own Google/Microsoft OAuth applications before cloud login works. The AI photo import requires a separately launched, server-side OpenAI API bridge. This is not yet a general secure BYO-key service. We have not verified live cloud OAuth accounts or simultaneous writes; see [setup](docs/setup.md).
 
-See `docs/adr/0001-byoe.md`.
+The existing ChatGPT flashcard deck is separate from this application's stored study attempts and is not automatically synchronized.
+
+## Open source
+
+MIT license. Contributions welcome. No key or secret should be committed to Git.
