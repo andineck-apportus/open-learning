@@ -10,7 +10,8 @@ const respond = (data, status, origin) => new Response(JSON.stringify(data), {
 });
 const allowedModels = new Set(['gpt-4.1-mini','gpt-4.1','gpt-4o-mini','gpt-4o']);
 const schema = {
-  type:'object', additionalProperties:false, required:['items'], properties:{
+  type:'object', additionalProperties:false, required:['items','frontLanguage','backLanguage'], properties:{
+    frontLanguage:{type:'string'},backLanguage:{type:'string'},
     items:{type:'array',items:{type:'object',additionalProperties:false,required:['front','back','kind'],properties:{
       front:{type:'string'},back:{type:'string'},kind:{type:'string',enum:['translation','qa']}
     }}}
@@ -49,7 +50,7 @@ export default {
         body:JSON.stringify({
           model,store:false,max_output_tokens:2400,
           input:[{role:'user',content:[
-            {type:'input_text',text:`Analyze this photographed school material for subject: ${topic}. Output only study cards grounded explicitly in the visible source. Mode: ${mode}. For vocabulary: associate the original language pairs accurately, do not invent translations. For factual subjects (history, biology, etc.) make brief clear factual question-answer cards based on the visible content; avoid speculative details. Preserve accents, articles and dates. If unreadable or ambiguous, omit that entry. Return up to 60 cards; the learner must review all proposals.`},
+            {type:'input_text',text:`Analyze this photographed school material for subject: ${topic}. Output only study cards grounded explicitly in the visible source. Mode: ${mode}. For vocabulary: associate the original language pairs accurately, do not invent translations. Identify the actual language on each side of the vocabulary table; return human-readable German language names in frontLanguage and backLanguage (e.g. Französisch and Deutsch) matching the order of the front and back entries. Do not assume front and back ordering from the subject label. If unsure, set that language name to an empty string. For factual question-answer sets use frontLanguage=Frage and backLanguage=Antwort. For factual subjects (history, biology, etc.) make brief clear factual question-answer cards based on the visible content; avoid speculative details. Preserve accents, articles and dates. If unreadable or ambiguous, omit that entry. Return up to 60 cards; the learner must review all proposals.`},
             {type:'input_image',image_url:image,detail:'high'}
           ]}],
           text:{format:{type:'json_schema',name:'study_cards',strict:true,schema}}
@@ -65,7 +66,7 @@ export default {
       if(!output)return respond({error:'AI returned no cards'},502,origin);
       const parsed=JSON.parse(output);
       if(!Array.isArray(parsed.items))return respond({error:'Invalid AI output'},502,origin);
-      return respond({items:parsed.items.slice(0,60).filter(x=>x&&typeof x.front==='string'&&typeof x.back==='string'&&x.front.trim()&&x.back.trim()).map(x=>({front:x.front.slice(0,400),back:x.back.slice(0,400),kind:x.kind==='qa'?'qa':'translation'}))},200,origin);
+      return respond({frontLanguage:String(parsed.frontLanguage||'').slice(0,40),backLanguage:String(parsed.backLanguage||'').slice(0,40),items:parsed.items.slice(0,60).filter(x=>x&&typeof x.front==='string'&&typeof x.back==='string'&&x.front.trim()&&x.back.trim()).map(x=>({front:x.front.slice(0,400),back:x.back.slice(0,400),kind:x.kind==='qa'?'qa':'translation'}))},200,origin);
     }catch(err){
       return respond({error:err?.name==='TimeoutError'?'AI request timed out':'AI request or parsing failed'},502,origin);
     }

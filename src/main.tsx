@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';import{createRoot}from'react-dom/client';import './style.css';
-import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries}from './model';
+import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries,setLanguageLabels}from './model';
 import{loadLocal,saveLocal}from './local';import{startLogin,finishLogin,connectGoogleDrive,type Provider,type OAuthConfig}from './oauth';import{readCloud,writeCloud,type Connection,ConflictError}from './cloud';
 import { recognizeImage, pairCandidates } from './ocr';
 type Task={item:Item;setId:string;direction:'front-back'|'back-front'};
@@ -12,7 +12,7 @@ function App(){
  const [studyMode,setStudyMode]=useState<'flip'|'write'|'test'>('flip'),[revealed,setRevealed]=useState(false);
  const [tasks,setTasks]=useState<Task[]>([]),[pos,setPos]=useState(0),[answer,setAnswer]=useState(''),[attempt,setAttempt]=useState(1),[stage,setStage]=useState<'ask'|'hint'|'correct'|'wrong'|'done'>('ask'),[roundResults,setRoundResults]=useState<Attempt[]>([]);
  const [draft,setDraft]=useState<Item[]>([]),[image,setImage]=useState<string|null>(null),[importText,setImportText]=useState(''),[importStatus,setImportStatus]=useState('');
- const [newSetTitle,setNewSetTitle]=useState(''),[targetSubject,setTargetSubject]=useState('french'),[ocrLanguages,setOcrLanguages]=useState('fra+deu'),[ocrProgress,setOcrProgress]=useState(0);
+ const [newSetTitle,setNewSetTitle]=useState(''),[targetSubject,setTargetSubject]=useState('french'),[draftFrontLanguage,setDraftFrontLanguage]=useState(''),[draftBackLanguage,setDraftBackLanguage]=useState(''),[ocrLanguages,setOcrLanguages]=useState('fra+deu'),[ocrProgress,setOcrProgress]=useState(0);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');const [notice,setNotice]=useState('');
  const configuredWorker=import.meta.env.VITE_AI_WORKER_URL||'https://open-learning-ai.andineck.workers.dev';
  const [workerOverride,setWorkerOverride]=useState(()=>localStorage.getItem('ol-ai-worker-override')||'');
@@ -25,6 +25,9 @@ function App(){
  const sets=lib?.sets||[],currentSet=sets.find(s=>s.id===selected)||sets[0],subject=lib?.subjects.find(s=>s.id===currentSet?.subjectId);
  const activeSubject=lib?.subjects.find(x=>x.id===selectedSubject)||subject||lib?.subjects[0];
  const subjectSets=sets.filter(s=>s.subjectId===activeSubject?.id);
+ const [frontLabel,backLabel]=currentSet?setLanguageLabels(currentSet,subject?.name||''):['Seite 1','Seite 2'];
+ const isTranslationSet=!!currentSet&&currentSet.items.length>0&&currentSet.items.some(i=>i.kind==='translation');
+ const directionText=(dir:'front-back'|'back-front')=>dir==='front-back'?frontLabel+' → '+backLabel:backLabel+' → '+frontLabel;
  function openSubject(id:string){setSelectedSubject(id);setTab('subject');setNotice('')}
  function openSet(id:string){setSelected(id);const matching=sets.find(x=>x.id===id);if(matching)setSelectedSubject(matching.subjectId);setTab('set');setNotice('')}
  function openImport(){setTargetSubject(tab==='subject'?activeSubject?.id||'french':currentSet?.subjectId||activeSubject?.id||'french');setTab('import')}
@@ -42,7 +45,7 @@ function App(){
  function next(){if(pos+1===tasks.length)setStage('done');else{setPos(p=>p+1);setAnswer('');setAttempt(1);setRevealed(false);setStage('ask')}}
  function addSubject(){if(!subjectName.trim())return;const id=uid();modify(d=>({...d,subjects:[...d.subjects,{id,name:subjectName.trim()}]}));setSubjectName('');setSelectedSubject(id);setTab('subject')}
  function addSet(){if(!setName.trim()||!activeSubject)return;const s:SetData={id:uid(),subjectId:activeSubject.id,title:setName.trim(),items:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};modify(d=>({...d,sets:[...d.sets,s]}));setSelected(s.id);setSetName('');setTab('set')}
- function parseText(){const rows=importText.split('\n').filter(Boolean).map(line=>{const cells=line.includes('\t')?line.split('\t'):line.split(';');return{ id:uid(),front:(cells[0]||'').trim(),back:(cells.slice(1).join(';')||'').trim(),kind:'translation' as const}}).filter(x=>x.front&&x.back);setDraft(rows);setImportStatus(rows.length+' Vorschläge erkannt. Bitte kontrollieren.')}
+ function parseText(){const rows=importText.split('\n').filter(Boolean).map(line=>{const cells=line.includes('\t')?line.split('\t'):line.split(';');return{ id:uid(),front:(cells[0]||'').trim(),back:(cells.slice(1).join(';')||'').trim(),kind:'translation' as const}}).filter(x=>x.front&&x.back);setDraft(rows);if(!draftFrontLanguage&&!draftBackLanguage){const sub=lib?.subjects.find(x=>x.id===targetSubject)?.name||'';setDraftFrontLanguage(/franz/i.test(sub)?'Französisch':/engl/i.test(sub)?'Englisch':'');setDraftBackLanguage(/franz|engl/i.test(sub)?'Deutsch':'')}setImportStatus(rows.length+' Vorschläge erkannt. Bitte kontrollieren.')}
  async function importPhoto(file:File){if(image)URL.revokeObjectURL(image);setImage(URL.createObjectURL(file));setImportStatus('Foto bereit. «Text aus Foto erkennen» arbeitet direkt auf diesem Gerät.');setDraft([]);}
  async function extractWithAI(){
    if(!image){setImportStatus('Bitte zuerst ein Foto auswählen.');return}
@@ -59,7 +62,10 @@ function App(){
      if(!Array.isArray(response.items))throw Error('Keine Lernkarten vom KI-Dienst erhalten');
      const proposals:Item[]=response.items.map((x:{front:string;back:string;kind:string})=>({id:uid(),front:String(x.front||''),back:String(x.back||''),kind:x.kind==='qa'?'qa':'translation'})).filter((x:Item)=>x.front.trim()&&x.back.trim());
      setDraft(proposals);
-     setImportStatus(proposals.length+' Karten vorgeschlagen. Bitte kontrollieren und erst danach speichern.');
+     const hasTranslations=proposals.some(x=>x.kind==='translation');
+     setDraftFrontLanguage(hasTranslations?(typeof response.frontLanguage==='string'?response.frontLanguage.trim():''):'Frage');
+     setDraftBackLanguage(hasTranslations?(typeof response.backLanguage==='string'?response.backLanguage.trim():''):'Antwort');
+     setImportStatus(proposals.length+' Karten vorgeschlagen. Prüfe auch die erkannten Sprachen und die Übersetzungsrichtung.');
    }catch(e){setImportStatus('KI-Import fehlgeschlagen: '+String(e))}
    finally{setBusy(false)}
  }
@@ -71,6 +77,8 @@ function App(){
     setImportText(result);
     const entries=pairCandidates(result);
     setDraft(entries.map(([front,back])=>({id:uid(),front,back,kind:'translation'})));
+   const pair=ocrLanguages==='fra+deu'?['Französisch','Deutsch']:ocrLanguages==='eng+deu'?['Englisch','Deutsch']:['',''];
+   setDraftFrontLanguage(pair[0]);setDraftBackLanguage(pair[1]);
     setImportStatus(entries.length?entries.length+' mögliche Paare erkannt. Bitte jedes Paar kontrollieren und fehlende Zeilen im Textfeld ergänzen.':'Text erkannt, aber keine sicheren Wortpaare. Bitte den erkannten Text im Feld korrigieren und mit Semikolon zwischen Frage und Antwort trennen.');
   }catch(e){setImportStatus('Erkennung fehlgeschlagen: '+String(e)+'. Du kannst die Liste weiterhin als Text einfügen.')}finally{setBusy(false)}
  }
@@ -78,13 +86,13 @@ function App(){
    const good=draft.filter(x=>x.front.trim()&&x.back.trim());if(!good.length)return;
    if(newSetTitle.trim()){
      const now=new Date().toISOString();const id=uid();
-     const s:SetData={id,subjectId:targetSubject,title:newSetTitle.trim(),items:good,createdAt:now,updatedAt:now};
+     const s:SetData={id,subjectId:targetSubject,title:newSetTitle.trim(),items:good,frontLanguage:draftFrontLanguage.trim()||undefined,backLanguage:draftBackLanguage.trim()||undefined,createdAt:now,updatedAt:now};
      modify(d=>({...d,sets:[...d.sets,s]}));setSelected(id);setNewSetTitle('');
    }else{
      if(!currentSet)return;
-     updateSet(s=>({...s,items:[...s.items,...good]}));
+     updateSet(s=>({...s,items:[...s.items,...good],frontLanguage:s.frontLanguage||draftFrontLanguage.trim()||undefined,backLanguage:s.backLanguage||draftBackLanguage.trim()||undefined}));
    }
-   setDraft([]);if(image)URL.revokeObjectURL(image);setImage(null);setImportText('');setTab('edit');
+   setDraft([]);setDraftFrontLanguage('');setDraftBackLanguage('');if(image)URL.revokeObjectURL(image);setImage(null);setImportText('');setTab('edit');
  }
  async function sync(){if(!connection||!lib)return;setBusy(true);setError('');try{const remote=await readCloud(connection);const merged=remote.data?mergeLibraries(lib,remote.data):lib;const saved=await writeCloud(remote.connection,merged);setLib(merged);setConnection(saved);setCloudState('Synchronisiert: '+new Date().toLocaleTimeString());setNotice('Cloud und Gerät synchronisiert.')}catch(e){setError((e instanceof ConflictError?'Speicherkonflikt: ':'Cloud-Fehler: ')+String(e));setCloudState('Synchronisation fehlgeschlagen')}finally{setBusy(false)}}
  async function restore(file:File){try{const d=JSON.parse(await file.text());if(d.schema!==1||!Array.isArray(d.sets)||!Array.isArray(d.attempts)||!Array.isArray(d.subjects))throw Error('Ungültiges Format');modify(x=>mergeLibraries(x,d));setNotice('Importiertes Backup lokal zusammengeführt.')}catch(e){setError('Backup-Import fehlgeschlagen: '+String(e))}}
@@ -141,7 +149,13 @@ function App(){
    <div className="method-grid">
     {([['flip','▤','Karten aufdecken','Antwort ansehen und selbst bewerten'],['write','✎','Schreibtraining','Schreiben, Hinweis, zweiter Versuch'],['test','✓','Lernkontrolle','Wie eine Prüfung, ohne Hilfen']] as const).map(([value,symbol,name,description])=><button key={value} aria-pressed={studyMode===value} className={'method-tile '+(studyMode===value?'chosen':'')} onClick={()=>setStudyMode(value)}><span className="method-symbol">{symbol}</span><strong>{name}</strong><small>{description}</small></button>)}
    </div>
-   <div className="direction-choice"><label>Abfragerichtung<select value={direction} onChange={e=>setDirection(e.target.value as typeof direction)}><option value="mixed">Beide Richtungen gemischt</option><option value="front-back">A → B</option><option value="back-front">B → A</option></select></label></div>
+   <div className="direction-choice"><label>Abfragerichtung<select value={direction} onChange={e=>setDirection(e.target.value as typeof direction)}>
+ <option value="mixed">{isTranslationSet?frontLabel+' ↔ '+backLabel+' (gemischt)':'Frage → Antwort (gemischt)'}</option>
+ <option value="front-back">{directionText('front-back')}</option>
+ {isTranslationSet&&<option value="back-front">{directionText('back-front')}</option>}
+ </select></label>
+ {isTranslationSet&&<details className="language-correction"><summary>Sprachen korrigieren</summary><div className="language-pair-fields"><label>Sprache der Vorderseite<input value={currentSet.frontLanguage||frontLabel} onChange={e=>updateSet(s=>({...s,frontLanguage:e.target.value}))}/></label><label>Sprache der Rückseite<input value={currentSet.backLanguage||backLabel} onChange={e=>updateSet(s=>({...s,backLanguage:e.target.value}))}/></label></div></details>}
+ </div>
    <div className="action-row"><button className="primary" disabled={!currentSet.items.length} onClick={()=>startPractice()}>▶ Lernen starten</button><button onClick={()=>setTab('edit')}>Lernkarten bearbeiten</button><button onClick={()=>{setTargetSubject(currentSet.subjectId);openImport()}}>+ Karten hinzufügen</button></div>
    {!currentSet.items.length&&<p className="muted">Dieses Lernset ist noch leer. Erstelle zuerst Karten oder importiere ein Foto.</p>}
   </section>
@@ -150,7 +164,7 @@ function App(){
 
  {tab==='import'&&<section>
  <h1>📷 Foto → Lernkarten</h1>
- <p>Fotografiere eine gut beleuchtete Buchseite. Die Texterkennung läuft direkt auf deinem Smartphone – ohne API-Schlüssel. Die Zuordnung von zwei Spalten ist ein Vorschlag und muss geprüft werden.</p>
+ <p>Fotografiere eine gut beleuchtete Buchseite. Die KI erkennt die Wörter und Sprachen und erstellt Lernkarten. Prüfe die Vorschläge und Sprachrichtungen vor dem Speichern.</p>
  <label>Neues Kartenset (optional; leer lassen, um das ausgewählte Set zu ergänzen)
   <input value={newSetTitle} onChange={e=>setNewSetTitle(e.target.value)} placeholder="z. B. Französisch – Unité 3"/>
  </label>
@@ -173,7 +187,7 @@ function App(){
    </select>
   </label>
   <button className="primary" disabled={busy||!workerUrl||!aiKey} onClick={extractWithAI}>{busy?'KI analysiert …':'✨ Foto mit KI analysieren'}</button>
-  {(!workerUrl||!aiKey)&&<p className="hint">KI noch nicht verbunden: Unter <button onClick={()=>setTab('settings')}>Einstellungen → KI-Verbindung</button> Worker-URL und API-Key eingeben.</p>}
+  {(!workerUrl||!aiKey)&&<p className="hint">KI noch nicht verbunden: Unter <button onClick={()=>setTab('settings')}>Einstellungen → KI-Verbindung</button> einen API-Key eingeben.</p>}
   <details><summary>Alternative: einfache Texterkennung ohne KI (OCR)</summary>
    <p>Nur für klar strukturierte Tabellen empfohlen; Zuordnung muss manuell geprüft werden.</p>
    <button disabled={busy} onClick={extractOnDevice}>Text lokal erkennen</button>
@@ -186,6 +200,7 @@ function App(){
  <button onClick={parseText} disabled={!importText.trim()}>Aus dem Text Karten vorschlagen</button>
  {importStatus&&<p role="status" className="hint">{importStatus}</p>}
  {draft.length>0&&<div className="panel"><h2>✅ Kontrolle vor dem Speichern ({draft.length})</h2>
+ {draft.some(x=>x.kind==='translation')&&<div className="language-review"><p className="muted">Erkannte Sprachen – bitte vor der Freigabe prüfen. Die erste Spalte wird von links nach rechts abgefragt.</p><div className="language-pair-fields"><label>Sprache links (Vorderseite)<input placeholder="z. B. Französisch" value={draftFrontLanguage} onChange={e=>setDraftFrontLanguage(e.target.value)}/></label><label>Sprache rechts (Rückseite)<input placeholder="z. B. Deutsch" value={draftBackLanguage} onChange={e=>setDraftBackLanguage(e.target.value)}/></label></div><p className="language-example">{draftFrontLanguage||'Sprache 1'} ↔ {draftBackLanguage||'Sprache 2'}</p></div>}
  <p>Frage und Antwort bearbeiten, falsche Paare entfernen und erst dann bestätigen.</p>
  {draft.map((item,i)=><div className="entry" key={item.id}><span>{i+1}</span>
  <input aria-label="Vorschlag Vorderseite" value={item.front} onChange={e=>setDraft(d=>d.map(x=>x.id===item.id?{...x,front:e.target.value}:x))}/>
@@ -206,7 +221,7 @@ function App(){
  <p className="celebration-message">{celebrationMessage}</p>
  <p className="score-line"><strong>{correctCount} von {roundResults.length}</strong> Aufgaben richtig ({Math.round(successRate*100)} %)</p><div className="result-grid"><div><strong>{roundResults.filter(r=>r.correct&&r.attempts===1).length}</strong><span>Direkt richtig</span></div><div><strong>{roundResults.filter(r=>r.correct&&r.attempts===2).length}</strong><span>Mit Hinweis</span></div><div><strong>{roundResults.filter(r=>!r.correct).length}</strong><span>Noch üben</span></div></div><div className="action-row center"><button className="primary" onClick={()=>startPractice(tasks.filter((_,i)=>{const r=roundResults[i];return r&&(!r.correct||r.attempts===2)}))} disabled={!roundResults.some(r=>!r.correct||r.attempts===2)}>Schwierige wiederholen ↻</button><button onClick={()=>startPractice()}>Ganzes Set neu starten</button></div></div>
  :task?<><div className="study-progress"><span>Karte {pos+1} von {tasks.length}</span><span>{Math.round(pos/tasks.length*100)}%</span></div><progress value={pos} max={tasks.length}/>
- <div className="learning-card"><span className="eyebrow">{task.direction==='front-back'?'SEITE A → B':'SEITE B → A'}</span><h1>{prompt}</h1>
+ <div className="learning-card"><span className="eyebrow">{task.item.kind==='translation'?directionText(task.direction):'FRAGE → ANTWORT'}</span><h1>{prompt}</h1>
  {studyMode==='flip'?<div className="reveal-area">{revealed?<><div className="divider-short"/><span className="eyebrow">LÖSUNG</span><h2>{expected}</h2><p>Hattest du die richtige Antwort im Kopf?</p><div className="rating-grid"><button className="rate-wrong" onClick={()=>rateFlip(false)}>✕ &nbsp; Noch nicht</button><button className="rate-correct" onClick={()=>rateFlip(true)}>✓ &nbsp; Gewusst!</button></div></>:<button className="reveal-button" onClick={()=>setRevealed(true)}>Antwort aufdecken <span aria-hidden="true">↻</span></button>}</div>
  :<div className="answer-area"><p className="muted">{studyMode==='test'?'Prüfungsmodus: ein Versuch, keine Hinweise.':attempt===1?'Schreibe deine Antwort. Du hast zwei Versuche.':'Zweiter Versuch'}</p>
  {stage==='hint'&&<div className="hint">💡 {hint()}</div>}
