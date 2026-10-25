@@ -1,6 +1,6 @@
-# Setup and operations
+# Setup
 
-## Run
+## Local development
 
 Node.js 22+ recommended.
 
@@ -10,38 +10,41 @@ cp .env.example .env
 npm run dev
 ```
 
-For photo recognition, open a second shell with `OPENAI_API_KEY` loaded as a **server environment variable** and run `npm run dev:ai`. The Vite development proxy routes `/api/extract` to port 8787. Never expose this unauthenticated bridge directly to the public internet. Before public deployment, add authentication, rate limiting, per-user quotas and abuse protection.
+For optional photo-to-entry extraction, run `npm run dev:ai` in a separate terminal with `OPENAI_API_KEY` set **server-side** in its environment. The Vite dev proxy routes `/api/extract` to localhost:8787. This API example has **no authentication or rate limits**: **never** expose it to the public internet.
 
-## Google Drive
+## Publish
 
-1. Create project in Google Cloud Console, enable **Google Drive API**.
-2. Configure OAuth consent screen and, if in testing, add test users. Public launch may require app review.
-3. Create OAuth **Web application** client; authorized JavaScript origin `http://localhost:5173`, redirect URI `http://localhost:5173/`. Add your production origin and redirect separately.
-4. Put the client ID in `VITE_GOOGLE_CLIENT_ID`, restart Vite.
-5. Sign in and press **Cloud synchronisieren**. Data are stored as `open-learning.json` in private `appDataFolder` using `drive.appdata` scope, not in ordinary visible Drive folders.
+See [GitHub Pages deployment](deployment.md). Cloud login requires OAuth registrations; Pages itself does not provide an AI backend.
 
-## Microsoft OneDrive
+## Register Google OAuth
 
-1. Register an app in Microsoft Entra ID, select personal Microsoft accounts as a supported account type.
-2. Configure SPA redirect URI `http://localhost:5173/` and your production redirect.
-3. Add delegated Microsoft Graph permission `Files.ReadWrite.AppFolder` and `User.Read`. Check consent and app-folder availability on target tenant/account.
-4. Set `VITE_MICROSOFT_CLIENT_ID`, restart Vite.
-5. Sign in and press **Cloud synchronisieren**. The app uses Microsoft Graph `/me/drive/special/approot`.
+1. Create a Google Cloud project and enable the Google Drive API.
+2. Configure Google Auth Platform consent screen and test users for development.
+3. Create an OAuth client of type Web application and register:
+   - Local origin `http://localhost:5173`, redirect `http://localhost:5173/`.
+   - Production origin `https://andineck-apportus.github.io`, redirect `https://andineck-apportus.github.io/open-learning/`.
+4. Add the public client ID to `VITE_GOOGLE_CLIENT_ID` locally or the `GOOGLE_CLIENT_ID` GitHub Actions repository variable for Pages.
+5. Consent to the `drive.appdata` scope. Open Settings in the app, connect and explicitly synchronize.
 
-## Data and limitations
+The application attempts to use the hidden `appDataFolder`; files will **not** appear in ordinary Google Drive folders.
 
-- Personal cloud storage is opt-in; data always save first to IndexedDB, then to cloud only on explicit sync.
-- OAuth access tokens live only in React memory, not persistent browser storage. Reconnect after reload or expiry.
-- OneDrive upload enforces ETag/If-Match checks. Google version checks reduce, but do not fully eliminate concurrent edits. For production implement a robust per-document compare-and-swap or immutable event synchronization.
-- With many devices writing simultaneously, sync can conflict. Back up JSON regularly.
-- Subjects, sets and study attempts sync as one JSON document. Attempts have immutable UUIDs so merge deduplicates them.
-- User-supplied sources are not uploaded until reviewed entries are approved; in photo extraction the image is sent temporarily to the selected AI bridge/provider.
-- Current backend supports OpenAI using the operator's server-side key; genuine per-user BYO API provider credentials remain a future security design. Do not publish a shared unauthenticated proxy.
-- For public deployment, secure account-to-storage isolation, CSRF protections, CSP, audit logging, abuse controls and privacy disclosures.
-- Do not depend on a ChatGPT subscription for API credits; API billing is separate.
-- The demo seeds Unité 2 for new browsers. It does not automatically import the independent ChatGPT flashcard review history.
-- For local backup, use Export in Settings.
+## Register Microsoft OAuth
 
-## Production checklist
+1. Register an application in Microsoft Entra with **personal Microsoft accounts** supported.
+2. Add platform **Single-page application (SPA)** with redirect:
+   - `http://localhost:5173/`
+   - `https://andineck-apportus.github.io/open-learning/`
+3. Enable delegated Graph scopes `Files.ReadWrite.AppFolder` and `User.Read`. Confirm consent availability for the account type.
+4. Add its **Application (client) ID** to `VITE_MICROSOFT_CLIENT_ID` locally or the `MICROSOFT_CLIENT_ID` repository variable.
+5. Connect and explicitly sync from Settings. Data target: Graph `/me/drive/special/approot`.
 
-Security review, OAuth app verification, auth token expiry/relogin UX, cloud concurrency stress tests, mobile offline tests, AI extract quality evaluation, backup/restore validation, privacy/legal review for minors, app hosting, HTTPS and CI smoke tests.
+## Known limitations and safety
+
+- Saving always happens locally first using IndexedDB; cloud sync is currently manual.
+- OAuth tokens are in memory only: reconnect on reload or expiry.
+- Google Drive sync uses a version check, **not guaranteed atomic**; concurrent writes can lose changes. OneDrive tries conditional writes.
+- Synchronization merges attempts by unique ID, and chooses newer set versions. If two devices edit the same set simultaneously, some changes can be lost.
+- The demo seeded Unité 2; it does not import ChatGPT's own saved flashcard reviews.
+- No production-ready BYOAI implementation: the example Node bridge uses its operator's API key and must be secured before use on a public site.
+- Back up regularly through Settings → JSON export.
+- Production readiness needs authorization testing, improved synchronization, account and privacy UX, tests and security review, particularly because children may use it.
