@@ -17,7 +17,22 @@ export async function startLogin(provider:Provider,config:OAuthConfig){
 }
 export async function finishLogin(config:OAuthConfig):Promise<{provider:Provider;accessToken:string}|null>{
  const query=new URLSearchParams(location.search);if(!query.has('code')&&!query.has('error'))return null;
- const saved=sessionStorage.getItem('ol-oauth');if(!saved)throw Error('OAuth-Sitzung fehlt.');const p=JSON.parse(saved)as{provider:Provider;state:string;verifier:string;redirect:string};
+ const saved=sessionStorage.getItem('ol-oauth');
+ // Ignore and clean up redirect parameters left behind by the retired Google
+ // authorization-code flow. Google now uses a popup token flow instead.
+ if(saved){
+   let previous: {provider?:Provider}|null=null;
+   try{previous=JSON.parse(saved)}catch{}
+   if(previous?.provider==='google'){
+     const clean=new URL(location.href);
+     for(const name of ['code','state','scope','authuser','prompt','error','error_description'])clean.searchParams.delete(name);
+     history.replaceState({},'',clean.pathname+clean.search+clean.hash);
+     sessionStorage.removeItem('ol-oauth');
+     return null;
+   }
+ }
+ if(!saved)throw Error('OAuth-Sitzung fehlt.');
+ const p=JSON.parse(saved)as{provider:Provider;state:string;verifier:string;redirect:string};
  if(query.get('state')!==p.state)throw Error('OAuth state stimmt nicht überein.');
  if(query.has('error'))throw Error(query.get('error_description')||query.get('error')||'Anmeldung abgebrochen');
  if(p.provider!=='microsoft')throw Error('Ungültiger OAuth-Rücksprung');
@@ -56,6 +71,6 @@ export function connectGoogleDrive(config:OAuthConfig):Promise<{provider:'google
       error_callback:e=>reject(Error('Google-Anmeldedialog: '+(e.type||'unbekannter Fehler')))
     });
     // Keep this within the originating click handler to avoid popup blockers.
-    client.requestAccessToken({prompt:''});
+    client.requestAccessToken();
   });
 }
