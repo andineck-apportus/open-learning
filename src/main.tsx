@@ -26,8 +26,8 @@ function App(){
  const activeSubject=lib?.subjects.find(x=>x.id===selectedSubject)||subject||lib?.subjects[0];
  const subjectSets=sets.filter(s=>s.subjectId===activeSubject?.id);
  function openSubject(id:string){setSelectedSubject(id);setTab('subject');setNotice('')}
- function openSet(id:string){setSelected(id);setTab('set');setNotice('')}
- function openImport(){setTargetSubject(currentSet?.subjectId||activeSubject?.id||'french');setTab('import')}
+ function openSet(id:string){setSelected(id);const matching=sets.find(x=>x.id===id);if(matching)setSelectedSubject(matching.subjectId);setTab('set');setNotice('')}
+ function openImport(){setTargetSubject(tab==='subject'?activeSubject?.id||'french':currentSet?.subjectId||activeSubject?.id||'french');setTab('import')}
  const subjectIcon=(name:string)=>/franz/i.test(name)?'🇫🇷':/engl/i.test(name)?'🇬🇧':/geschicht/i.test(name)?'🏛️':/bio/i.test(name)?'🌱':/geo/i.test(name)?'🌍':/mathe/i.test(name)?'∑':'📚';
  function modify(fn:(d:Library)=>Library){setLib(old=>old?{...fn(old),updatedAt:new Date().toISOString()}:old);setNotice('Lokal gespeichert – Cloud-Synchronisation separat ausführen.')}
  function updateSet(fn:(s:SetData)=>SetData){if(!currentSet)return;modify(d=>({...d,sets:d.sets.map(s=>s.id===currentSet.id?{...fn(s),updatedAt:new Date().toISOString()}:s)}))}
