@@ -45,3 +45,7 @@ For photo recognition, open a second shell with `OPENAI_API_KEY` loaded as a **s
 ## Production checklist
 
 Security review, OAuth app verification, auth token expiry/relogin UX, cloud concurrency stress tests, mobile offline tests, AI extract quality evaluation, backup/restore validation, privacy/legal review for minors, app hosting, HTTPS and CI smoke tests.
+
+## Google static browser token flow
+
+Google Drive login uses Google Identity Services `initTokenClient` and `requestAccessToken` from the browser. This needs a **Web application OAuth Client ID** and an authorized JavaScript origin; **do not supply a client secret** in the app or GitHub. Only the Microsoft login uses the authorization-code/PKCE redirect handler. After Google consent, click **Cloud synchronisieren**. The Google access token is session-only, and expires; reconnect when necessary.
