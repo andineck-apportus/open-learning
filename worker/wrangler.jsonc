@@ -3,7 +3,14 @@
   "name": "open-learning-ai",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
   "vars": {
-    "ALLOWED_ORIGINS": "https://andineck-apportus.github.io,http://localhost:5173"
-  }
+    "ALLOWED_ORIGINS": "https://andineck-apportus.github.io,http://localhost:5173",
+    "APP_URL": "https://andineck-apportus.github.io/open-learning/",
+    "GOOGLE_CLIENT_ID": "266516766033-qu2k33m6c45c7badkq1gq4q4g8f84oim.apps.googleusercontent.com",
+    "GOOGLE_REDIRECT_URI": "https://open-learning-ai.andineck.workers.dev/auth/google/callback"
+  },
+  "d1_databases": [{"binding":"AUTH_DB","database_name":"open-learning-auth","database_id":"03be99c4-9101-4f5b-8e45-aba484113144"}],
+  "triggers": {"crons":["17 3 * * *"]}
 }

@@ -1,3 +1,4 @@
+import {handleAuth, cleanup} from './auth.js';
 const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-OpenAI-Key',
@@ -19,7 +20,9 @@ const schema = {
   }
 };
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(cleanup(env)); },
   async fetch(request, env) {
+    if(new URL(request.url).pathname.startsWith('/auth/')) return handleAuth(request, env);
     const origin=request.headers.get('Origin')||'';
     const allowed=(env.ALLOWED_ORIGINS||'https://andineck-apportus.github.io,http://localhost:5173').split(',').map(x=>x.trim());
     // This is an abuse-reduction measure, not an authentication boundary. CORS can be bypassed by non-browser clients.
@@ -73,3 +76,4 @@ export default {
     }
   }
 };
+
