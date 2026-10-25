@@ -13,7 +13,9 @@ function App(){
  const [draft,setDraft]=useState<Item[]>([]),[image,setImage]=useState<string|null>(null),[importText,setImportText]=useState(''),[importStatus,setImportStatus]=useState('');
  const [newSetTitle,setNewSetTitle]=useState(''),[targetSubject,setTargetSubject]=useState('french'),[ocrLanguages,setOcrLanguages]=useState('fra+deu'),[ocrProgress,setOcrProgress]=useState(0);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');const [notice,setNotice]=useState('');
- const [workerUrl,setWorkerUrl]=useState(()=>localStorage.getItem('ol-ai-worker-url')||'');
+ const configuredWorker=import.meta.env.VITE_AI_WORKER_URL||'';
+ const [workerOverride,setWorkerOverride]=useState(()=>localStorage.getItem('ol-ai-worker-override')||'');
+ const workerUrl=workerOverride||configuredWorker;
  const [aiKey,setAiKey]=useState(''),[aiModel,setAiModel]=useState('gpt-4.1-mini');
  const [aiMode,setAiMode]=useState<'auto'|'translation'|'qa'>('auto');
  useEffect(()=>{loadLocal().then(setLib).catch(e=>setError(String(e)))},[]);
@@ -136,10 +138,8 @@ function App(){
 
  {tab==='learn'&&<section>{stage==='done'?<><h1>{roundResults.every(r=>r.correct&&r.attempts===1)?'🎉🎊 Konfettibombe! 🎊🎉':'Runde geschafft! 🎉'}</h1><p>{roundResults.filter(r=>r.correct&&r.attempts===1).length} sofort richtig · {roundResults.filter(r=>r.correct&&r.attempts===2).length} mit Hinweis · {roundResults.filter(r=>!r.correct).length} falsch</p><button className="primary" onClick={()=>startPractice(tasks.filter((_,i)=>{const r=roundResults[i];return r&&!r.correct||r?.attempts===2}))}>Schwierige wiederholen</button><button onClick={()=>startPractice()}>Ganze Runde wiederholen</button></>:task?<><p className="muted">Aufgabe {pos+1} von {tasks.length} · Versuch {attempt}/2</p><progress value={pos} max={tasks.length}/><p>{task.direction==='front-back'?'Schreibe die Antwort':'Übersetze zurück'}</p><h1>{prompt}</h1><p className="muted">Eine zulässige Übersetzung reicht.</p>{stage==='hint'&&<div className="hint">💡 {hint()}</div>}{(stage==='ask'||stage==='hint')?<form onSubmit={e=>{e.preventDefault();check()}}><input autoFocus value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Deine Antwort …"/><button className="primary" disabled={!answer.trim()}>Prüfen</button></form>:<><div className={stage==='correct'?'success':'error'}>{stage==='correct'?'🎉 Richtig!':'Noch nicht richtig.'}<p>Lösung: {options.join(' / ')}</p>{stage==='wrong'&&<p>Deine Antwort: {answer}</p>}</div><button className="primary" onClick={next}>Weiter →</button></>}</>:<p>Keine Aufgaben in diesem Set.</p>}</section>}
  {tab==='settings'&&<section><h1>Eigener Cloud-Speicher</h1><p>Synchronisiere deine Lerninhalte und Versuche über Google Drive oder OneDrive. Keine zentrale Datenbank.</p><div className="two"><button disabled={!config.googleClientId} onClick={()=>connectGoogleDrive(config).then(c=>{setConnection({provider:'google',token:c.accessToken});setCloudState('Google Drive verbunden');setError('')}).catch(e=>setError('Anmeldung: '+e.message))}>Mit Google Drive verbinden</button><button disabled={!config.microsoftClientId} onClick={()=>startLogin('microsoft',config).catch(e=>setError(e.message))}>Mit OneDrive verbinden</button></div>{(!config.googleClientId||!config.microsoftClientId)&&<p className="muted">OAuth Client-IDs fehlen noch. Anleitung in docs/setup.md. Die Buttons werden nach der Konfiguration aktiviert.</p>}<p><strong>Status:</strong> {cloudState}</p>{connection&&<><button className="primary" disabled={busy} onClick={sync}>{busy?'Synchronisiert …':'Cloud synchronisieren'}</button><button onClick={()=>{setConnection(null);setCloudState('Nicht verbunden')}}>Verbindung trennen</button></>}<h2>✨ KI-Verbindung (BYO OpenAI)</h2>
- <p>Für das automatische Erstellen von Lernkarten aus Fotos wird dein eigener Cloudflare Worker verwendet. Der API-Key wird nur für diese Browsersitzung gehalten, nicht in Drive oder im lokalen Speicher gesichert.</p>
- <label>Worker-URL (HTTPS)
-  <input type="url" autoComplete="off" spellCheck={false} placeholder="https://open-learning-ai.example.workers.dev" value={workerUrl} onChange={e=>{const v=e.target.value.trim();setWorkerUrl(v);localStorage.setItem('ol-ai-worker-url',v)}}/>
- </label>
+ <p>Gib deinen eigenen OpenAI-API-Key ein, um aus Fotos automatisch Lernkarten erstellen zu lassen. Der Key wird nicht dauerhaft gespeichert; nach einem Neustart musst du ihn erneut eingeben.</p>
+ {!configuredWorker&&!workerOverride&&<p className="hint">Die KI-Verbindung wurde vom Betreiber noch nicht aktiviert. Lernkarten und Cloud-Speicher funktionieren weiterhin ohne KI.</p>}
  <label>Persönlicher OpenAI-API-Key (nur diese Sitzung)
   <input type="password" autoComplete="off" spellCheck={false} placeholder="sk-…" value={aiKey} onChange={e=>setAiKey(e.target.value.trim())}/>
  </label>
@@ -150,7 +150,11 @@ function App(){
   </select>
  </label>
  <button onClick={()=>setAiKey('')}>API-Key aus der Sitzung entfernen</button>
- <p className="muted">Der Schlüssel wird über HTTPS an deinen Worker gesendet. Das ist kein vollständiger Schutz vor kompromittierten Browsern, Erweiterungen oder Worker-Betreibern. Nutze einen eingeschränkten Projekt-Key mit kleinem Budget. <a href="https://github.com/andineck-apportus/open-learning/blob/main/docs/ai-worker.md" target="_blank" rel="noreferrer">Worker einrichten</a>.</p>
+ <p className="muted">Sicherheit: Dein Schlüssel wird für die Bildanalyse über HTTPS an den KI-Dienst übertragen und ist während der Sitzung im Browser verfügbar. Verwende einen separaten API-Projektschlüssel mit kleinem Budget. Der Betreiber des KI-Dienstes könnte Anfragen und Schlüssel technisch einsehen.</p>
+ <details><summary>Erweitert: eigenen KI-Dienst verwenden (Self-Hosting)</summary>
+  <label>Alternative Worker-Adresse (optional)<input type="url" autoComplete="off" spellCheck={false} placeholder="https://mein-worker.workers.dev" value={workerOverride} onChange={e=>{const v=e.target.value.trim();setWorkerOverride(v);if(v)localStorage.setItem('ol-ai-worker-override',v);else localStorage.removeItem('ol-ai-worker-override')}}/></label>
+  <p className="muted">Nur für fortgeschrittene Benutzer. Standardmässig verwendet Open Learning den zentralen Dienst, sobald dieser eingerichtet ist.</p>
+ </details>
  <h2>Backup</h2><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>JSON exportieren</button><label>JSON importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label><p className="muted">Cloud-Tokens werden nicht dauerhaft gespeichert. Nach einem Browser-Neustart ist eine neue Anmeldung nötig. Bis zur erfolgreichen Synchronisation sind Änderungen nur auf diesem Gerät.</p></section>}
  <footer>Open Learning · MIT · BYOE · <span>Fotos und Inhalte vor Freigabe prüfen</span></footer></main>
 }

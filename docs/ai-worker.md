@@ -11,7 +11,7 @@ npx wrangler deploy
 ```
 
 Wrangler prints a URL such as `https://open-learning-ai.<account>.workers.dev`.
-In Open Learning → Einstellungen → KI-Verbindung, paste this full URL (HTTPS only) and enter your personal OpenAI API key **for the current browser session**. No central API key is configured in the Worker.
+The *maintainer*, not each learner, configures its URL once in GitHub Actions repository variables as `AI_WORKER_URL` (the public HTTPS Worker origin), then re-runs the Pages workflow. Learners only enter their own OpenAI API key under **Einstellungen → KI-Verbindung**. No central API key is configured in the Worker. Power users can override the URL via the optional advanced section.
 
 The Worker intentionally never writes API keys, photos, or responses to any database or storage. The OpenAI Responses request uses `store:false`. Cloudflare's and OpenAI's service policies still apply.
 
