@@ -13,7 +13,7 @@ function App(){
  const [draft,setDraft]=useState<Item[]>([]),[image,setImage]=useState<string|null>(null),[importText,setImportText]=useState(''),[importStatus,setImportStatus]=useState('');
  const [newSetTitle,setNewSetTitle]=useState(''),[targetSubject,setTargetSubject]=useState('french'),[ocrLanguages,setOcrLanguages]=useState('fra+deu'),[ocrProgress,setOcrProgress]=useState(0);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');const [notice,setNotice]=useState('');
- const configuredWorker=import.meta.env.VITE_AI_WORKER_URL||'';
+ const configuredWorker=import.meta.env.VITE_AI_WORKER_URL||'https://open-learning-ai.andineck.workers.dev';
  const [workerOverride,setWorkerOverride]=useState(()=>localStorage.getItem('ol-ai-worker-override')||'');
  const workerUrl=workerOverride||configuredWorker;
  const [aiKey,setAiKey]=useState(''),[aiModel,setAiModel]=useState('gpt-4.1-mini');
