@@ -1,5 +1,9 @@
 # Setup and operations
 
+## Persistent Google login
+
+The hosted app uses the Worker authorization-code flow described in [Google OAuth](google-oauth.md). The browser-token instructions below describe the earlier implementation and are retained only for historical context.
+
 ## Run
 
 Node.js 22+ recommended.
@@ -49,3 +53,4 @@ Security review, OAuth app verification, auth token expiry/relogin UX, cloud con
 ## Google static browser token flow
 
 Google Drive login uses Google Identity Services `initTokenClient` and `requestAccessToken` from the browser. This needs a **Web application OAuth Client ID** and an authorized JavaScript origin; **do not supply a client secret** in the app or GitHub. Only the Microsoft login uses the authorization-code/PKCE redirect handler. After Google consent, click **Cloud synchronisieren**. The Google access token is session-only, and expires; reconnect when necessary.
+
