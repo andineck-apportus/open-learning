@@ -99,7 +99,7 @@ function App(){
  {tab==='home'&&<div className="page-stack">
  <section className="hero">
   <div className="hero-copy"><span className="eyebrow">DEIN LERNRAUM</span><h1>Was möchtest du heute <em>lernen?</em></h1><p>Entdecke deine Lernsets, übe in deinem Tempo oder verwandle eine Buchseite direkt in neue Karten.</p><button className="hero-action" onClick={()=>setTab('import')}>◎ &nbsp; Neues Lernset fotografieren <span aria-hidden="true">↗</span></button></div>
-  <div className="hero-art" aria-hidden="true"><div className="hero-orbit orbit-one"/><div className="hero-orbit orbit-two"/><div className="hero-card hero-card-back">A → B</div><div className="hero-card hero-card-front"><span>bonjour</span><small>guten Tag ✦</small></div><div className="hero-spark">✳</div></div>
+  <div className="hero-art" aria-hidden="true"><div className="hero-orbit orbit-one"/><div className="hero-orbit orbit-two"/><div className="hero-card hero-card-back">A → B</div><div className="hero-card hero-card-front"><span>bonjour</span><small>guten Tag ✦</small></div></div>
  </section>
  <div className="stat-grid"><div className="stat-tile"><span>✎ LERNVERSUCHE</span><strong>{total}</strong><small>Dein Fortschritt zählt</small></div><div className="stat-tile"><span>▤ LERNSETS</span><strong>{sets.length}</strong><small>Bereit zum Üben</small></div><div className="stat-tile"><span>◈ FÄCHER</span><strong>{lib.subjects.length}</strong><small>Alles an einem Ort</small></div></div>
  <section className="content-panel"><div className="section-heading"><div><span className="eyebrow">DEINE BIBLIOTHEK</span><h2>Fächer & Lernsets</h2></div><button className="subtle-button" onClick={()=>setTab('import')}>+ Karten hinzufügen</button></div>
