@@ -33,3 +33,9 @@ The existing ChatGPT flashcard deck is separate from this application's stored s
 ## Open source
 
 MIT license. Contributions welcome. No key or secret should be committed to Git.
+
+## AI photo import (bring your own key)
+
+A small optional Cloudflare Worker (`worker/src/index.js`) accepts a per-session OpenAI API key and an image, returns proposed entries and never persists credentials. The learner must review every entry. The static app can run without this feature. Deploy the Worker yourself and paste its HTTPS URL in **Einstellungen → KI-Verbindung**. See [Worker setup](docs/ai-worker.md).
+
+**Security:** A user-entered key is still accessible to scripts in that browser session and to the Worker operator. Use a limited project key, not a privileged credential. The Worker is not a centrally managed secure credential vault.

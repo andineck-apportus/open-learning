@@ -13,6 +13,9 @@ function App(){
  const [draft,setDraft]=useState<Item[]>([]),[image,setImage]=useState<string|null>(null),[importText,setImportText]=useState(''),[importStatus,setImportStatus]=useState('');
  const [newSetTitle,setNewSetTitle]=useState(''),[targetSubject,setTargetSubject]=useState('french'),[ocrLanguages,setOcrLanguages]=useState('fra+deu'),[ocrProgress,setOcrProgress]=useState(0);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');const [notice,setNotice]=useState('');
+ const [workerUrl,setWorkerUrl]=useState(()=>localStorage.getItem('ol-ai-worker-url')||'');
+ const [aiKey,setAiKey]=useState(''),[aiModel,setAiModel]=useState('gpt-4.1-mini');
+ const [aiMode,setAiMode]=useState<'auto'|'translation'|'qa'>('auto');
  useEffect(()=>{loadLocal().then(setLib).catch(e=>setError(String(e)))},[]);
  useEffect(()=>{if(lib)saveLocal(lib).catch(e=>setError('Lokales Speichern fehlgeschlagen: '+String(e)))},[lib]);
  useEffect(()=>{finishLogin(config).then(c=>{if(c){setConnection({provider:c.provider,token:c.accessToken});setCloudState(c.provider==='google'?'Google Drive verbunden':'OneDrive verbunden');setTab('settings')}}).catch(e=>setError('Anmeldung: '+e.message))},[]);
@@ -31,7 +34,25 @@ function App(){
  function addSet(){if(!setName.trim()||!lib?.subjects.length)return;const s: SetData={id:uid(),subjectId:lib.subjects[0].id,title:setName.trim(),items:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};modify(d=>({...d,sets:[...d.sets,s]}));setSelected(s.id);setSetName('');setTab('edit')}
  function parseText(){const rows=importText.split('\n').filter(Boolean).map(line=>{const cells=line.includes('\t')?line.split('\t'):line.split(';');return{ id:uid(),front:(cells[0]||'').trim(),back:(cells.slice(1).join(';')||'').trim(),kind:'translation' as const}}).filter(x=>x.front&&x.back);setDraft(rows);setImportStatus(rows.length+' Vorschläge erkannt. Bitte kontrollieren.')}
  async function importPhoto(file:File){if(image)URL.revokeObjectURL(image);setImage(URL.createObjectURL(file));setImportStatus('Foto bereit. «Text aus Foto erkennen» arbeitet direkt auf diesem Gerät.');setDraft([]);}
- async function extractWithAI(){if(!image){setImportStatus('Bitte zuerst ein Foto auswählen.');return}setBusy(true);try{const res=await fetch(image);const blob=await res.blob();const reader=new FileReader();const dataUrl=await new Promise<string>((resolve,reject)=>{reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(blob)});const reply=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:dataUrl})});if(!reply.ok)throw Error((await reply.text()).slice(0,200));const out=await reply.json() as {items:{front:string;back:string;kind?:string}[]};if(!Array.isArray(out.items))throw Error('Ungültige Antwort');setDraft(out.items.map(x=>({id:uid(),front:x.front||'',back:x.back||'',kind:x.kind==='qa'?'qa':'translation'})));setImportStatus('KI-Vorschläge geladen: '+out.items.length+'. Vor dem Speichern bitte kontrollieren.')}catch(e){setImportStatus('KI-Import fehlgeschlagen: '+String(e)+'. Der optionale API-Dienst muss separat laufen.')}finally{setBusy(false)}}
+ async function extractWithAI(){
+   if(!image){setImportStatus('Bitte zuerst ein Foto auswählen.');return}
+   if(!workerUrl||!aiKey){setImportStatus('Bitte zuerst unter Einstellungen die Worker-URL und einen API-Key für diese Sitzung eingeben.');return}
+   if(!/^https:\/\//i.test(workerUrl)){setImportStatus('Für den KI-Dienst ist HTTPS erforderlich.');return}
+   setBusy(true);
+   try{
+     const imageBlob=await (await fetch(image)).blob();
+     const dataUrl=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(Error('Foto konnte nicht gelesen werden'));r.readAsDataURL(imageBlob)});
+     const endpoint=workerUrl.replace(/\/+$/,'')+'/api/extract';
+     const reply=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','X-OpenAI-Key':aiKey},body:JSON.stringify({image:dataUrl,subject:lib?.subjects.find(x=>x.id===targetSubject)?.name||subject?.name||'Lernstoff',mode:aiMode,model:aiModel})});
+     const response=await reply.json().catch(()=>({error:'Keine gültige Antwort des KI-Dienstes'}));
+     if(!reply.ok)throw Error(response.error||('HTTP '+reply.status));
+     if(!Array.isArray(response.items))throw Error('Keine Lernkarten vom KI-Dienst erhalten');
+     const proposals:Item[]=response.items.map((x:{front:string;back:string;kind:string})=>({id:uid(),front:String(x.front||''),back:String(x.back||''),kind:x.kind==='qa'?'qa':'translation'})).filter((x:Item)=>x.front.trim()&&x.back.trim());
+     setDraft(proposals);
+     setImportStatus(proposals.length+' Karten vorgeschlagen. Bitte kontrollieren und erst danach speichern.');
+   }catch(e){setImportStatus('KI-Import fehlgeschlagen: '+String(e))}
+   finally{setBusy(false)}
+ }
  async function extractOnDevice(){
   if(!image){setImportStatus('Bitte zuerst ein Foto machen.');return}
   setBusy(true);setOcrProgress(0);
@@ -82,11 +103,20 @@ function App(){
  <label>Foto aufnehmen oder Bild auswählen
  <input type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)importPhoto(f)}}/></label>
  {image&&<div className="photo-panel"><img className="preview" src={image} alt="Fotografierte Lernseite"/>
- <button className="primary" disabled={busy} onClick={extractOnDevice}>{busy?'Texterkennung läuft …':'🔎 Text aus Foto erkennen'}</button>
- {busy&&<progress value={ocrProgress} max="100" aria-label="Fortschritt der Texterkennung"/>}
- <details><summary>Erweiterte KI-Erkennung (eigener Server)</summary>
- <p>Für unstrukturierte Seiten und Geschichte genauer, benötigt einen separat gesicherten KI-Dienst. Auf GitHub Pages derzeit nicht verfügbar.</p>
- <button disabled={busy} onClick={extractWithAI}>KI-Dienst versuchen</button></details>
+  <label>KI-Erkennung
+   <select value={aiMode} onChange={e=>setAiMode(e.target.value as typeof aiMode)}>
+    <option value="auto">Automatisch (Vokabeln oder Wissensfragen)</option>
+    <option value="translation">Vokabelpaare</option>
+    <option value="qa">Fragen und Antworten (z.B. Geschichte)</option>
+   </select>
+  </label>
+  <button className="primary" disabled={busy||!workerUrl||!aiKey} onClick={extractWithAI}>{busy?'KI analysiert …':'✨ Foto mit KI analysieren'}</button>
+  {(!workerUrl||!aiKey)&&<p className="hint">KI noch nicht verbunden: Unter <button onClick={()=>setTab('settings')}>Einstellungen → KI-Verbindung</button> Worker-URL und API-Key eingeben.</p>}
+  <details><summary>Alternative: einfache Texterkennung ohne KI (OCR)</summary>
+   <p>Nur für klar strukturierte Tabellen empfohlen; Zuordnung muss manuell geprüft werden.</p>
+   <button disabled={busy} onClick={extractOnDevice}>Text lokal erkennen</button>
+   {busy&&<progress value={ocrProgress} max="100" aria-label="Fortschritt der Texterkennung"/>}
+  </details>
  </div>}
  <label>Erkannter Text / Textimport
  <textarea rows={8} value={importText} onChange={e=>setImportText(e.target.value)} placeholder={'Bonjour;Guten Tag\nMerci;Danke'}/></label>
@@ -105,7 +135,23 @@ function App(){
  </section>}
 
  {tab==='learn'&&<section>{stage==='done'?<><h1>{roundResults.every(r=>r.correct&&r.attempts===1)?'🎉🎊 Konfettibombe! 🎊🎉':'Runde geschafft! 🎉'}</h1><p>{roundResults.filter(r=>r.correct&&r.attempts===1).length} sofort richtig · {roundResults.filter(r=>r.correct&&r.attempts===2).length} mit Hinweis · {roundResults.filter(r=>!r.correct).length} falsch</p><button className="primary" onClick={()=>startPractice(tasks.filter((_,i)=>{const r=roundResults[i];return r&&!r.correct||r?.attempts===2}))}>Schwierige wiederholen</button><button onClick={()=>startPractice()}>Ganze Runde wiederholen</button></>:task?<><p className="muted">Aufgabe {pos+1} von {tasks.length} · Versuch {attempt}/2</p><progress value={pos} max={tasks.length}/><p>{task.direction==='front-back'?'Schreibe die Antwort':'Übersetze zurück'}</p><h1>{prompt}</h1><p className="muted">Eine zulässige Übersetzung reicht.</p>{stage==='hint'&&<div className="hint">💡 {hint()}</div>}{(stage==='ask'||stage==='hint')?<form onSubmit={e=>{e.preventDefault();check()}}><input autoFocus value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Deine Antwort …"/><button className="primary" disabled={!answer.trim()}>Prüfen</button></form>:<><div className={stage==='correct'?'success':'error'}>{stage==='correct'?'🎉 Richtig!':'Noch nicht richtig.'}<p>Lösung: {options.join(' / ')}</p>{stage==='wrong'&&<p>Deine Antwort: {answer}</p>}</div><button className="primary" onClick={next}>Weiter →</button></>}</>:<p>Keine Aufgaben in diesem Set.</p>}</section>}
- {tab==='settings'&&<section><h1>Eigener Cloud-Speicher</h1><p>Synchronisiere deine Lerninhalte und Versuche über Google Drive oder OneDrive. Keine zentrale Datenbank.</p><div className="two"><button disabled={!config.googleClientId} onClick={()=>startLogin('google',config).catch(e=>setError(e.message))}>Mit Google Drive verbinden</button><button disabled={!config.microsoftClientId} onClick={()=>startLogin('microsoft',config).catch(e=>setError(e.message))}>Mit OneDrive verbinden</button></div>{(!config.googleClientId||!config.microsoftClientId)&&<p className="muted">OAuth Client-IDs fehlen noch. Anleitung in docs/setup.md. Die Buttons werden nach der Konfiguration aktiviert.</p>}<p><strong>Status:</strong> {cloudState}</p>{connection&&<><button className="primary" disabled={busy} onClick={sync}>{busy?'Synchronisiert …':'Cloud synchronisieren'}</button><button onClick={()=>{setConnection(null);setCloudState('Nicht verbunden')}}>Verbindung trennen</button></>}<h2>Backup</h2><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>JSON exportieren</button><label>JSON importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label><p className="muted">Cloud-Tokens werden nicht dauerhaft gespeichert. Nach einem Browser-Neustart ist eine neue Anmeldung nötig. Bis zur erfolgreichen Synchronisation sind Änderungen nur auf diesem Gerät.</p></section>}
+ {tab==='settings'&&<section><h1>Eigener Cloud-Speicher</h1><p>Synchronisiere deine Lerninhalte und Versuche über Google Drive oder OneDrive. Keine zentrale Datenbank.</p><div className="two"><button disabled={!config.googleClientId} onClick={()=>startLogin('google',config).catch(e=>setError(e.message))}>Mit Google Drive verbinden</button><button disabled={!config.microsoftClientId} onClick={()=>startLogin('microsoft',config).catch(e=>setError(e.message))}>Mit OneDrive verbinden</button></div>{(!config.googleClientId||!config.microsoftClientId)&&<p className="muted">OAuth Client-IDs fehlen noch. Anleitung in docs/setup.md. Die Buttons werden nach der Konfiguration aktiviert.</p>}<p><strong>Status:</strong> {cloudState}</p>{connection&&<><button className="primary" disabled={busy} onClick={sync}>{busy?'Synchronisiert …':'Cloud synchronisieren'}</button><button onClick={()=>{setConnection(null);setCloudState('Nicht verbunden')}}>Verbindung trennen</button></>}<h2>✨ KI-Verbindung (BYO OpenAI)</h2>
+ <p>Für das automatische Erstellen von Lernkarten aus Fotos wird dein eigener Cloudflare Worker verwendet. Der API-Key wird nur für diese Browsersitzung gehalten, nicht in Drive oder im lokalen Speicher gesichert.</p>
+ <label>Worker-URL (HTTPS)
+  <input type="url" autoComplete="off" spellCheck={false} placeholder="https://open-learning-ai.example.workers.dev" value={workerUrl} onChange={e=>{const v=e.target.value.trim();setWorkerUrl(v);localStorage.setItem('ol-ai-worker-url',v)}}/>
+ </label>
+ <label>Persönlicher OpenAI-API-Key (nur diese Sitzung)
+  <input type="password" autoComplete="off" spellCheck={false} placeholder="sk-…" value={aiKey} onChange={e=>setAiKey(e.target.value.trim())}/>
+ </label>
+ <label>KI-Modell
+  <select value={aiModel} onChange={e=>setAiModel(e.target.value)}>
+   <option value="gpt-4.1-mini">GPT-4.1 mini (Standard)</option><option value="gpt-4o-mini">GPT-4o mini</option>
+   <option value="gpt-4.1">GPT-4.1</option><option value="gpt-4o">GPT-4o</option>
+  </select>
+ </label>
+ <button onClick={()=>setAiKey('')}>API-Key aus der Sitzung entfernen</button>
+ <p className="muted">Der Schlüssel wird über HTTPS an deinen Worker gesendet. Das ist kein vollständiger Schutz vor kompromittierten Browsern, Erweiterungen oder Worker-Betreibern. Nutze einen eingeschränkten Projekt-Key mit kleinem Budget. <a href="https://github.com/andineck-apportus/open-learning/blob/main/docs/ai-worker.md" target="_blank" rel="noreferrer">Worker einrichten</a>.</p>
+ <h2>Backup</h2><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>JSON exportieren</button><label>JSON importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label><p className="muted">Cloud-Tokens werden nicht dauerhaft gespeichert. Nach einem Browser-Neustart ist eine neue Anmeldung nötig. Bis zur erfolgreichen Synchronisation sind Änderungen nur auf diesem Gerät.</p></section>}
  <footer>Open Learning · MIT · BYOE · <span>Fotos und Inhalte vor Freigabe prüfen</span></footer></main>
 }
 function SetPicker({sets,selected,setSelected}:{sets:SetData[];selected:string;setSelected:(s:string)=>void}){return <label>Lernset <select value={selected} onChange={e=>setSelected(e.target.value)}>{sets.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select></label>}
