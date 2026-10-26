@@ -1,17 +1,18 @@
 import React,{useEffect,useMemo,useState,useRef} from 'react';import{createRoot}from'react-dom/client';import './style.css';
 import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries,deleteLibraryEntity,setLanguageLabels}from './model';
-import{loadLocal,saveLocal}from './local';import{startLogin,finishLogin,type Provider,type OAuthConfig}from './oauth';import{readCloud,writeCloud,type Connection,ConflictError}from './cloud';
+import {useAutoSync} from './use-auto-sync';import{startLogin,finishLogin,type Provider,type OAuthConfig}from './oauth';import{type Connection}from './cloud';
 import { recognizeImage, pairCandidates } from './ocr';
-import {beginGoogleLogin,finishGoogleLogin,hasGoogleSession,googleAccessToken,disconnectGoogle} from './google-session';
+import {beginGoogleLogin,finishGoogleLogin,hasGoogleSession,disconnectGoogle} from './google-session';
 type ManageAction={kind:'subject'|'set';mode:'create'|'rename'|'delete';id?:string;name:string};
 type Task={item:Item;setId:string;direction:'front-back'|'back-front'};
 const config:OAuthConfig={googleClientId:import.meta.env.VITE_GOOGLE_CLIENT_ID||'',microsoftClientId:import.meta.env.VITE_MICROSOFT_CLIENT_ID||''};
 const GSESSION='ol-google-session',API_SESSION='ol-api-session',API_LOCAL='ol-api-remembered',API_REMEMBER='ol-api-persist',LAST_PROVIDER='ol-last-cloud-provider';
 const download=(filename:string,data:string)=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.href=u;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 function App(){
- const [lib,setLib]=useState<Library|null>(null),[tab,setTab]=useState<'home'|'subject'|'set'|'edit'|'learn'|'settings'|'import'>('home');
+ const [tab,setTab]=useState<'home'|'subject'|'set'|'edit'|'learn'|'settings'|'import'>('home');
  const [selected,setSelected]=useState('unite2'),[selectedSubject,setSelectedSubject]=useState('french');
  const [connection,setConnection]=useState<Connection|null>(null);
+ const {lib,modify,sync,pause:pauseSync,status:syncStatus,syncing,syncError}=useAutoSync(connection);
  const [cloudState,setCloudState]=useState(()=>hasGoogleSession()?'Google Drive wird verbunden …':'Nicht verbunden');
  const [manage,setManage]=useState<ManageAction|null>(null);
  const [direction,setDirection]=useState<'mixed'|'front-back'|'back-front'>('mixed');
@@ -34,13 +35,13 @@ function App(){
  const [rememberAiKey,setRememberAiKey]=useState(()=>localStorage.getItem(API_REMEMBER)==='yes');
  const [aiKey,setAiKey]=useState(()=>localStorage.getItem(API_LOCAL)||sessionStorage.getItem(API_SESSION)||''),[aiModel,setAiModel]=useState('gpt-4.1-mini');
  const [aiMode,setAiMode]=useState<'auto'|'translation'|'qa'>('auto');
- useEffect(()=>{loadLocal().then(setLib).catch(e=>setError(String(e)))},[]);
+
  useEffect(()=>{
   if(rememberAiKey){if(aiKey)localStorage.setItem(API_LOCAL,aiKey);else localStorage.removeItem(API_LOCAL);sessionStorage.removeItem(API_SESSION);}
   else{localStorage.removeItem(API_LOCAL);if(aiKey)sessionStorage.setItem(API_SESSION,aiKey);else sessionStorage.removeItem(API_SESSION);}
  },[aiKey,rememberAiKey]);
  useEffect(()=>{localStorage.setItem(API_REMEMBER,rememberAiKey?'yes':'no')},[rememberAiKey]);
- useEffect(()=>{if(lib)saveLocal(lib).catch(e=>setError('Lokales Speichern fehlgeschlagen: '+String(e)))},[lib]);
+
  useEffect(()=>{finishLogin(config).then(c=>{if(c){setConnection({provider:c.provider,token:c.accessToken});localStorage.setItem(LAST_PROVIDER,c.provider);setCloudState(c.provider==='google'?'Google Drive verbunden':'OneDrive verbunden');setTab('settings')}}).catch(e=>setError('Anmeldung: '+e.message))},[]);
  useEffect(()=>{
   let active=true;
@@ -48,8 +49,7 @@ function App(){
    const completed=await finishGoogleLogin();
    if(completed&&active)setTab('settings');
    if(hasGoogleSession()){
-    const token=await googleAccessToken();
-    if(active){setConnection({provider:'google',token});setCloudState('Google Drive dauerhaft verbunden');}
+    if(active){setConnection({provider:'google',token:''});setCloudState('Google Drive dauerhaft verbunden');}
    }
   })().catch(e=>{if(active){setCloudState(hasGoogleSession()?'Google Drive vorübergehend nicht erreichbar – Seite neu laden':'Google Drive: Bitte erneut verbinden');setError(e.message)}});
   return()=>{active=false};
@@ -60,8 +60,8 @@ function App(){
  }
  async function disconnectCloud(){
   setBusy(true);setError('');
-  try{if(connection?.provider==='google'||hasGoogleSession())await disconnectGoogle();sessionStorage.removeItem(GSESSION);localStorage.removeItem(LAST_PROVIDER);setConnection(null);setCloudState('Nicht verbunden')}
-  catch(e){setError('Trennen fehlgeschlagen: '+String(e))}finally{setBusy(false)}
+  try{await pauseSync();if(connection?.provider==='google'||hasGoogleSession())await disconnectGoogle();sessionStorage.removeItem(GSESSION);localStorage.removeItem(LAST_PROVIDER);setConnection(null);setCloudState('Nicht verbunden')}
+  catch(e){setError('Trennen fehlgeschlagen: '+String(e));setConnection(null)}finally{setBusy(false)}
  }
  const sets=lib?.sets||[],currentSet=sets.find(s=>s.id===selected)||sets[0],subject=lib?.subjects.find(s=>s.id===currentSet?.subjectId);
  const activeSubject=lib?.subjects.find(x=>x.id===selectedSubject)||subject||lib?.subjects[0];
@@ -73,7 +73,6 @@ function App(){
  function openSet(id:string){setSelected(id);const matching=sets.find(x=>x.id===id);if(matching)setSelectedSubject(matching.subjectId);setTab('set');setNotice('')}
  function openImport(){const id=tab==='subject'?activeSubject?.id||'':currentSet?.subjectId||activeSubject?.id||'';setTargetSubject(id);setImportSubjectChoice(id||'__new__');setImportDestination('__new__');setTab('import')}
  const subjectIcon=(name:string)=>/franz/i.test(name)?'🇫🇷':/engl/i.test(name)?'🇬🇧':/geschicht/i.test(name)?'🏛️':/bio/i.test(name)?'🌱':/geo/i.test(name)?'🌍':/mathe/i.test(name)?'∑':'📚';
- function modify(fn:(d:Library)=>Library){setLib(old=>old?{...fn(old),updatedAt:new Date().toISOString()}:old);setNotice('Lokal gespeichert – Cloud-Synchronisation separat ausführen.')}
  function updateSet(fn:(s:SetData)=>SetData){if(!currentSet)return;modify(d=>({...d,sets:d.sets.map(s=>s.id===currentSet.id?{...fn(s),updatedAt:new Date().toISOString()}:s)}))}
  const total=lib?.attempts.length||0;
  function startPractice(items?:Task[]){if(!currentSet)return;const q=items||currentSet.items.flatMap(item=>direction==='mixed'&&item.kind==='translation'?[{item,setId:currentSet.id,direction:'front-back' as const},{item,setId:currentSet.id,direction:'back-front' as const}]:[{item,setId:currentSet.id,direction:direction==='back-front'&&item.kind==='translation'?'back-front' as const:'front-back' as const}]);setTasks(q);setPos(0);setAnswer('');setAttempt(1);setRevealed(false);setStage('ask');setRoundResults([]);setTab('learn');setNotice('')}
@@ -188,13 +187,6 @@ function App(){
   if(image)URL.revokeObjectURL(image);setImage(null);setDraft([]);setImportText('');setImportStage('photo');
   setImportStatus('');setSuggestedTitle('');setDetectedSubject('');setImportSubjectChoice('__new__');setImportDestination('__new__');
  }
- async function sync(){
- if(!connection||!lib)return;
- setBusy(true);setError('');
- try{const current=connection.provider==='google'?{...connection,token:await googleAccessToken()}:connection;const remote=await readCloud(current);const merged=remote.data?mergeLibraries(lib,remote.data):lib;const saved=await writeCloud(remote.connection,merged);setLib(merged);setConnection(saved);setCloudState('Synchronisiert: '+new Date().toLocaleTimeString());setNotice('Cloud und Gerät synchronisiert.');}
- catch(e){const message=String(e);if(connection.provider==='google'&&(message.includes('Cloud 401')||message.includes('invalid_token')||!hasGoogleSession())){sessionStorage.removeItem(GSESSION);setConnection(null);setCloudState('Google Drive: Zugriff erneuern');}else setCloudState('Synchronisation fehlgeschlagen');setError((e instanceof ConflictError?'Speicherkonflikt: ':'Cloud-Fehler: ')+message)}
- finally{setBusy(false)}
- }
  async function restore(file:File){try{const d=JSON.parse(await file.text());if(d.schema!==1||!Array.isArray(d.sets)||!Array.isArray(d.attempts)||!Array.isArray(d.subjects))throw Error('Ungültiges Format');modify(x=>mergeLibraries(x,d));setNotice('Importiertes Backup lokal zusammengeführt.')}catch(e){setError('Backup-Import fehlgeschlagen: '+String(e))}}
  const correctCount=roundResults.filter(r=>r.correct).length;
  const successRate=roundResults.length?correctCount/roundResults.length:0;
@@ -202,12 +194,13 @@ function App(){
  const celebrationTitle=successRate===1?'Wahnsinn – alles richtig!':fireConfetti?'Fantastisch gemacht!':successRate>=0.6?'Richtig gut drangeblieben!':'Stark, dass du geübt hast!';
  const celebrationMessage=successRate===1?'Das war eine perfekte Runde. Dein Einsatz hat sich gelohnt!':fireConfetti?'Über fünf Sechstel richtig – das ist eine richtig starke Leistung!':successRate>=0.6?'Du hast schon viel geschafft. Mit jeder Runde wirst du sicherer.':'Jedes geübte Wort zählt. Die schwierigen Karten machen wir beim nächsten Mal leichter!';
   const stats=useMemo(()=>{if(!lib)return[];return lib.sets.map(s=>{const rs=lib.attempts.filter(r=>r.setId===s.id);const last=new Map(rs.map(r=>[r.itemId+'|'+r.direction,r]));const mastered=[...last.values()].filter(r=>r.correct&&r.attempts===1).length;return{id:s.id,total:s.items.length,tries:rs.length,mastered}})},[lib]);
- if(!lib)return <main><p>Open Learning wird geladen …</p></main>;
+ if(!lib)return <main><p>{syncError||'Open Learning wird geladen …'}</p>{syncError&&<button onClick={()=>location.reload()}>Erneut versuchen</button>}</main>;
  return <main>
  <header className="app-header">
   <div className="brand-group"><span className="brand-mark" aria-hidden="true">✦</span><div><strong className="brand">open learning<span className="brand-dot">.</span></strong><p className="muted">Lernen, das bleibt.</p></div></div>
   <span className="pill"><span className="status-dot"/> {connection?connection.provider==='google'?'Google Drive':'OneDrive':'Nur dieses Gerät'}</span>
  </header>
+ <div className="sync-status" role="status" aria-live="polite"><span className={syncing?"sync-indicator syncing":"sync-indicator"}/>{syncStatus}{syncError&&<span className="sync-error">{syncError}</span>}</div>
  <nav className="main-nav" aria-label="Hauptnavigation">
   <button onClick={()=>setTab('home')} className={tab==='home'?'active':''}><span aria-hidden="true">⌂</span> Übersicht</button>
   <button onClick={openImport} className={tab==='import'?'active':''}><span aria-hidden="true">◎</span> Importieren</button>
@@ -325,8 +318,8 @@ function App(){
  </div>}</div></>:<p>Keine Aufgaben in diesem Lernset.</p>}</section>}
  {tab==='settings'&&<section><h1>Eigener Cloud-Speicher</h1><p>Synchronisiere deine Lerninhalte und Versuche über Google Drive oder OneDrive. Lerninhalte bleiben in deinem Cloud-Speicher; die Anmeldung wird sicher auf dem Server verwaltet.</p><div className="two"><button disabled={busy} onClick={()=>void authorizeGoogle()}>{connection?.provider==='google'?'Google Drive erneut autorisieren':localStorage.getItem(LAST_PROVIDER)==='google'?'Google Drive-Zugriff erneuern':'Mit Google Drive verbinden'}</button><button disabled={!config.microsoftClientId} onClick={()=>startLogin('microsoft',config).catch(e=>setError(e.message))}>Mit OneDrive verbinden</button></div>
  {!config.microsoftClientId&&<p className="muted">Nicht alle Cloud-Anbieter sind konfiguriert. Verfügbare Verbindungen kannst du oben auswählen.</p>}
- <p><strong>Status:</strong> {cloudState}</p>
- {connection&&<div className="action-row"><button className="primary" disabled={busy} onClick={sync}>{busy?'Synchronisiert …':'Cloud synchronisieren'}</button><button onClick={disconnectCloud}>Verbindung trennen</button></div>}
+ <p><strong>Verbindung:</strong> {cloudState}</p><p><strong>Synchronisation:</strong> {syncStatus}</p>
+ {connection&&<div className="action-row"><button className="primary" disabled={syncing} onClick={()=>void sync()}>{syncing?'Synchronisiert …':'Cloud synchronisieren'}</button><button onClick={disconnectCloud}>Verbindung trennen</button></div>}
  <p className="muted">Google Drive bleibt auf diesem Gerät auch nach einem Neuladen oder Browser-Neustart verbunden. Zugriffstokens werden automatisch erneuert. Die Gerätesitzung gilt bis zu 180 Tage; bei einem Widerruf durch Google ist eine erneute Anmeldung nötig. Nur auf privaten, vertrauenswürdigen Geräten angemeldet bleiben.</p>
  <h2>✨ KI-Verbindung (BYO OpenAI)</h2>
  <p>Dein API-Key bleibt bei einem Seiten-Refresh erhalten. Optional kannst du ihn auf diesem Gerät auch über einen Browser-Neustart hinaus speichern.</p>
@@ -348,7 +341,7 @@ function App(){
   <label>Alternative Worker-Adresse (optional)<input type="url" autoComplete="off" spellCheck={false} placeholder="https://mein-worker.workers.dev" value={workerOverride} onChange={e=>{const v=e.target.value.trim();setWorkerOverride(v);if(v)localStorage.setItem('ol-ai-worker-override',v);else localStorage.removeItem('ol-ai-worker-override')}}/></label>
   <p className="muted">Nur für fortgeschrittene Benutzer. Standardmässig verwendet Open Learning den zentralen Dienst, sobald dieser eingerichtet ist.</p>
  </details>
- <h2>Backup</h2><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>JSON exportieren</button><label>JSON importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label><p className="muted">Google-Refresh-Tokens werden verschlüsselt auf dem Server gespeichert. Dieses Gerät speichert eine widerrufbare Sitzung; «Verbindung trennen» beendet sie auf dem Server. Die Lerninhalte bleiben lokal gespeichert; Cloud-Synchronisation wird weiterhin manuell gestartet. Dein OpenAI-Key wird nicht in Google Drive gespeichert.</p></section>}
+ <h2>Backup</h2><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>JSON exportieren</button><label>JSON importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label><p className="muted">Google-Refresh-Tokens werden verschlüsselt auf dem Server gespeichert. Dieses Gerät speichert eine widerrufbare Sitzung; «Verbindung trennen» beendet sie auf dem Server. Die Lerninhalte bleiben lokal gespeichert; Google Drive wird beim Öffnen, nach Änderungen, bei der Rückkehr zur App und während der Nutzung alle 30 Sekunden automatisch abgeglichen. Offline gespeicherte Änderungen werden bei wiederhergestellter Verbindung übertragen. Bei gleichzeitiger Bearbeitung desselben Felds gilt die neuere Änderung; verschiedene Karten und Felder werden zusammengeführt. Dein OpenAI-Key wird nicht in Google Drive gespeichert.</p></section>}
  {manage&&<ManageDialog action={manage} library={lib} onCancel={()=>setManage(null)} onSave={saveManaged} onDelete={deleteManaged}/>}
  <footer>Open Learning · MIT · BYOE · <span>Fotos und Inhalte vor Freigabe prüfen</span></footer></main>
 }

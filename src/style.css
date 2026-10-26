@@ -180,3 +180,5 @@ section>button+button{margin-inline-start:12px}
 .dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;margin-top:28px}
 .danger-button{background:#b2354b;border-color:#b2354b;color:white}.danger-button:hover:not(:disabled){background:#90283b;color:white}
 @media(max-width:600px){.collection-toolbar{align-items:stretch}.collection-toolbar>.action-row{width:100%}.collection-toolbar button{flex:1}.manage-dialog{padding:22px}.dialog-actions button{flex:1}.section-heading>.action-row{width:100%}section>button+button{margin-inline-start:0;margin-top:12px}}
+
+.sync-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:15px 0 0;color:#756c86;font-size:12px}.sync-indicator{width:7px;height:7px;border-radius:50%;background:#8c7aa9;flex:none}.sync-indicator.syncing{background:#7653e8;animation:sync-pulse 1s infinite alternate}.sync-error{width:100%;color:#a24e62}.sync-status:has(.sync-error) .sync-indicator{background:#a24e62}@keyframes sync-pulse{to{opacity:.3}}@media(prefers-reduced-motion:reduce){.sync-indicator.syncing{animation:none}}
