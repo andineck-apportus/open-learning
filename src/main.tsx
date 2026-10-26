@@ -1,8 +1,9 @@
 import React,{useEffect,useMemo,useState,useRef} from 'react';import{createRoot}from'react-dom/client';import './style.css';
-import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries,setLanguageLabels}from './model';
+import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries,deleteLibraryEntity,setLanguageLabels}from './model';
 import{loadLocal,saveLocal}from './local';import{startLogin,finishLogin,type Provider,type OAuthConfig}from './oauth';import{readCloud,writeCloud,type Connection,ConflictError}from './cloud';
 import { recognizeImage, pairCandidates } from './ocr';
 import {beginGoogleLogin,finishGoogleLogin,hasGoogleSession,googleAccessToken,disconnectGoogle} from './google-session';
+type ManageAction={kind:'subject'|'set';mode:'create'|'rename'|'delete';id?:string;name:string};
 type Task={item:Item;setId:string;direction:'front-back'|'back-front'};
 const config:OAuthConfig={googleClientId:import.meta.env.VITE_GOOGLE_CLIENT_ID||'',microsoftClientId:import.meta.env.VITE_MICROSOFT_CLIENT_ID||''};
 const GSESSION='ol-google-session',API_SESSION='ol-api-session',API_LOCAL='ol-api-remembered',API_REMEMBER='ol-api-persist',LAST_PROVIDER='ol-last-cloud-provider';
@@ -12,7 +13,8 @@ function App(){
  const [selected,setSelected]=useState('unite2'),[selectedSubject,setSelectedSubject]=useState('french');
  const [connection,setConnection]=useState<Connection|null>(null);
  const [cloudState,setCloudState]=useState(()=>hasGoogleSession()?'Google Drive wird verbunden …':'Nicht verbunden');
- const [subjectName,setSubjectName]=useState(''),[setName,setSetName]=useState(''),[direction,setDirection]=useState<'mixed'|'front-back'|'back-front'>('mixed');
+ const [manage,setManage]=useState<ManageAction|null>(null);
+ const [direction,setDirection]=useState<'mixed'|'front-back'|'back-front'>('mixed');
  const [studyMode,setStudyMode]=useState<'flip'|'write'|'test'>('flip'),[revealed,setRevealed]=useState(false);
  const [tasks,setTasks]=useState<Task[]>([]),[pos,setPos]=useState(0),[answer,setAnswer]=useState(''),[attempt,setAttempt]=useState(1),[stage,setStage]=useState<'ask'|'hint'|'correct'|'wrong'|'done'>('ask'),[roundResults,setRoundResults]=useState<Attempt[]>([]);
  const [draft,setDraft]=useState<Item[]>([]),[image,setImage]=useState<string|null>(null),[importText,setImportText]=useState(''),[importStatus,setImportStatus]=useState('');
@@ -82,8 +84,26 @@ function App(){
  function check(){if(!task||!answer.trim())return;if(correct||attempt===2||studyMode==='test'){const r:Attempt={id:uid(),itemId:task.item.id,setId:task.setId,direction:task.direction,correct,attempts:attempt,createdAt:new Date().toISOString()};modify(d=>({...d,attempts:[...d.attempts,r]}));setRoundResults(v=>[...v,r]);setStage(correct?'correct':'wrong')}else{setAttempt(2);setStage('hint');setAnswer('')}}
  function rateFlip(isRight:boolean){if(!task)return;const r:Attempt={id:uid(),itemId:task.item.id,setId:task.setId,direction:task.direction,correct:isRight,attempts:1,createdAt:new Date().toISOString()};modify(d=>({...d,attempts:[...d.attempts,r]}));setRoundResults(v=>[...v,r]);next()}
  function next(){if(pos+1===tasks.length)setStage('done');else{setPos(p=>p+1);setAnswer('');setAttempt(1);setRevealed(false);setStage('ask')}}
- function addSubject(){if(!subjectName.trim())return;const id=uid();modify(d=>({...d,subjects:[...d.subjects,{id,name:subjectName.trim()}]}));setSubjectName('');setSelectedSubject(id);setTab('subject')}
- function addSet(){if(!setName.trim()||!activeSubject)return;const s:SetData={id:uid(),subjectId:activeSubject.id,title:setName.trim(),items:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};modify(d=>({...d,sets:[...d.sets,s]}));setSelected(s.id);setSetName('');setTab('set')}
+ function saveManaged(name:string){
+  if(!manage||!name.trim())return;
+  const now=new Date().toISOString();
+  if(manage.mode==='create'){
+   const id=uid();
+   if(manage.kind==='subject'){modify(d=>({...d,subjects:[...d.subjects,{id,name:name.trim(),updatedAt:now}]}));setSelectedSubject(id);setTab('subject')}
+   else if(activeSubject){modify(d=>({...d,sets:[...d.sets,{id,subjectId:activeSubject.id,title:name.trim(),items:[],createdAt:now,updatedAt:now}]}));setSelected(id);setTab('set')}
+  }else if(manage.mode==='rename'){
+   modify(d=>manage.kind==='subject'?{...d,subjects:d.subjects.map(x=>x.id===manage.id?{...x,name:name.trim(),updatedAt:now}:x)}:{...d,sets:d.sets.map(x=>x.id===manage.id?{...x,title:name.trim(),updatedAt:now}:x)});
+  }
+  setManage(null);
+ }
+ function deleteManaged(){
+  if(!manage?.id||!lib)return;
+  const parent=lib.sets.find(x=>x.id===manage.id)?.subjectId;
+  modify(d=>deleteLibraryEntity(d,manage.kind,manage.id!));
+  if(manage.kind==='subject'){setSelectedSubject('');setSelected('');setTab('home')}
+  else{setSelected('');if(parent)setSelectedSubject(parent);setTab('subject')}
+  setManage(null);
+ }
  function parseText(){
   const rows=importText.split('\n').filter(Boolean).map(line=>{const cells=line.includes('\t')?line.split('\t'):line.split(';');return{id:uid(),front:(cells[0]||'').trim(),back:cells.slice(1).join(';').trim(),kind:'translation' as const}}).filter(x=>x.front&&x.back);
   setDraft(rows);setImportStage('review');
@@ -202,29 +222,30 @@ function App(){
   <button className="hero-action" onClick={openImport}>◎ &nbsp; Lernstoff fotografieren <span aria-hidden="true">↗</span></button>
  </div><div className="hero-art" aria-hidden="true"><div className="hero-orbit orbit-one"/><div className="hero-orbit orbit-two"/><div className="hero-card hero-card-back">A → B</div><div className="hero-card hero-card-front"><span>bonjour</span><small>guten Tag ✦</small></div></div></section>
  <section className="content-panel">
-  <div className="section-heading"><div><span className="eyebrow">DEINE BIBLIOTHEK</span><h2>Fächer</h2><p className="muted">Wähle ein Fach, um seine Lernsets zu sehen.</p></div><span className="overview-count">{lib.subjects.length} Fächer · {sets.length} Lernsets</span></div>
-  <div className="subject-directory">{lib.subjects.map((sub,i)=><button className="subject-tile" key={sub.id} onClick={()=>openSubject(sub.id)}>
+  <div className="section-heading"><div><span className="eyebrow">DEINE BIBLIOTHEK</span><h2>Fächer</h2><p className="muted">Wähle ein Fach, um seine Lernsets zu sehen.</p></div><button className="primary" onClick={()=>setManage({kind:"subject",mode:"create",name:""})}>+ Fach hinzufügen</button></div>
+  {!lib.subjects.length&&<div className="empty-state"><h3>Noch keine Fächer</h3><p>Lege mit „Fach hinzufügen“ dein erstes Fach an.</p></div>}
+  <div className="subject-directory">{lib.subjects.map(sub=><article className="managed-card" key={sub.id}><button className="subject-tile" onClick={()=>openSubject(sub.id)}>
    <span className="subject-tile-icon">{subjectIcon(sub.name)}</span>
    <span className="subject-tile-info"><strong>{sub.name}</strong><small>{sets.filter(x=>x.subjectId===sub.id).length} Lernsets</small></span>
    <span className="tile-arrow" aria-hidden="true">→</span>
-  </button>)}</div>
-  <details className="create-panel"><summary>+ Neues Fach hinzufügen</summary><form className="inline-create" onSubmit={e=>{e.preventDefault();addSubject()}}><input value={subjectName} onChange={e=>setSubjectName(e.target.value)} placeholder="Zum Beispiel Geschichte" aria-label="Fachname"/><button className="primary" disabled={!subjectName.trim()}>Fach erstellen</button></form></details>
+  </button><div className="card-actions"><button aria-label={sub.name+" umbenennen"} onClick={()=>setManage({kind:"subject",mode:"rename",id:sub.id,name:sub.name})}>Umbenennen</button><button className="danger-text" aria-label={sub.name+" löschen"} onClick={()=>setManage({kind:"subject",mode:"delete",id:sub.id,name:sub.name})}>Löschen</button></div></article>)}</div>
+
  </section>
  <div className="stat-grid"><div className="stat-tile"><span>▤ LERNSETS</span><strong>{sets.length}</strong><small>Bereit zum Üben</small></div><div className="stat-tile"><span>✎ LERNVERSUCHE</span><strong>{total}</strong><small>Jeder Versuch zählt</small></div><div className="stat-tile"><span>◈ FÄCHER</span><strong>{lib.subjects.length}</strong><small>Alles an einem Ort</small></div></div>
  </div>}
  {tab==='subject'&&activeSubject&&<div className="page-stack">
   <div className="breadcrumb"><button onClick={()=>setTab('home')}>Alle Fächer</button><span>›</span><strong>{activeSubject.name}</strong></div>
-  <section className="content-panel"><div className="section-heading"><div><span className="subject-tile-icon">{subjectIcon(activeSubject.name)}</span><span className="eyebrow">FACH</span><h1>{activeSubject.name}</h1><p className="muted">{subjectSets.length} Lernsets · Wähle ein Lernset zum Üben oder Bearbeiten.</p></div><button className="subtle-button" onClick={openImport}>◎ Lernstoff fotografieren</button></div>
-   {subjectSets.length?<div className="set-directory">{subjectSets.map(st=><button className="set-tile" key={st.id} onClick={()=>openSet(st.id)}>
+  <section className="content-panel"><div className="section-heading"><div><span className="subject-tile-icon">{subjectIcon(activeSubject.name)}</span><span className="eyebrow">FACH</span><h1>{activeSubject.name}</h1><p className="muted">{subjectSets.length} Lernsets · Wähle ein Lernset zum Üben oder Bearbeiten.</p></div><div className="action-row"><button onClick={()=>setManage({kind:"subject",mode:"rename",id:activeSubject.id,name:activeSubject.name})}>Fach umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:"subject",mode:"delete",id:activeSubject.id,name:activeSubject.name})}>Fach löschen</button></div></div><div className="collection-toolbar"><h2>Lernsets</h2><div className="action-row"><button onClick={openImport}>Foto importieren</button><button className="primary" onClick={()=>setManage({kind:"set",mode:"create",name:""})}>+ Lernset hinzufügen</button></div></div>
+   {subjectSets.length?<div className="set-directory">{subjectSets.map(st=><article className="managed-card" key={st.id}><button className="set-tile" onClick={()=>openSet(st.id)}>
     <span className="set-tile-symbol" aria-hidden="true">▤</span><span className="set-tile-info"><strong>{st.title}</strong><small>{st.items.length} Lernkarten · {lib.attempts.filter(r=>r.setId===st.id).length} Lernversuche</small></span><span className="tile-arrow" aria-hidden="true">→</span>
-   </button>)}</div>:<div className="empty-state"><span>📚</span><h3>Hier ist noch Platz für Neues.</h3><p>Erstelle dein erstes Lernset oder fotografiere eine Schulbuchseite.</p><button onClick={openImport}>Foto importieren</button></div>}
-   <details className="create-panel"><summary>+ Neues Lernset in {activeSubject.name}</summary><form className="inline-create" onSubmit={e=>{e.preventDefault();addSet()}}><input value={setName} onChange={e=>setSetName(e.target.value)} placeholder="Zum Beispiel Unité 3" aria-label="Titel des Lernsets"/><button className="primary" disabled={!setName.trim()}>Lernset erstellen</button></form></details>
+   </button><div className="card-actions"><button aria-label={st.title+" umbenennen"} onClick={()=>setManage({kind:"set",mode:"rename",id:st.id,name:st.title})}>Umbenennen</button><button className="danger-text" aria-label={st.title+" löschen"} onClick={()=>setManage({kind:"set",mode:"delete",id:st.id,name:st.title})}>Löschen</button></div></article>)}</div>:<div className="empty-state"><span>📚</span><h3>Hier ist noch Platz für Neues.</h3><p>Erstelle dein erstes Lernset oder fotografiere eine Schulbuchseite.</p><button onClick={openImport}>Foto importieren</button></div>}
+ 
   </section>
  </div>}
  {tab==='set'&&currentSet&&<div className="page-stack">
   <div className="breadcrumb"><button onClick={()=>setTab('home')}>Alle Fächer</button><span>›</span><button onClick={()=>openSubject(currentSet.subjectId)}>{subject?.name}</button><span>›</span><strong>{currentSet.title}</strong></div>
   <section className="focus-panel set-detail">
-   <span className="eyebrow">LERNSET · {subject?.name}</span><h1>{currentSet.title}</h1><p className="muted">{currentSet.items.length} Lernkarten · {lib.attempts.filter(r=>r.setId===currentSet.id).length} Lernversuche</p>
+   <div className="section-heading"><span className="eyebrow">LERNSET · {subject?.name}</span><div className="action-row"><button onClick={()=>setManage({kind:"set",mode:"rename",id:currentSet.id,name:currentSet.title})}>Lernset umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:"set",mode:"delete",id:currentSet.id,name:currentSet.title})}>Lernset löschen</button></div></div><h1>{currentSet.title}</h1><p className="muted">{currentSet.items.length} Lernkarten · {lib.attempts.filter(r=>r.setId===currentSet.id).length} Lernversuche</p>
    <div className="method-title"><h2>Wie möchtest du lernen?</h2><p className="muted">Wähle deine Lernmethode und die Richtung.</p></div>
    <div className="method-grid">
     {([['flip','▤','Karten aufdecken','Antwort ansehen und selbst bewerten'],['write','✎','Schreibtraining','Schreiben, Hinweis, zweiter Versuch'],['test','✓','Lernkontrolle','Wie eine Prüfung, ohne Hilfen']] as const).map(([value,symbol,name,description])=><button key={value} aria-pressed={studyMode===value} className={'method-tile '+(studyMode===value?'chosen':'')} onClick={()=>setStudyMode(value)}><span className="method-symbol">{symbol}</span><strong>{name}</strong><small>{description}</small></button>)}
@@ -240,7 +261,7 @@ function App(){
    {!currentSet.items.length&&<p className="muted">Dieses Lernset ist noch leer. Erstelle zuerst Karten oder importiere ein Foto.</p>}
   </section>
  </div>}
- {tab==='edit'&&<section><div className="breadcrumb"><button onClick={()=>openSet(currentSet?.id||selected)}>← Lernset</button><span>›</span><strong>Karten bearbeiten</strong></div><h1>Einträge kontrollieren</h1><SetPicker sets={sets} selected={selected} setSelected={setSelected}/>{currentSet?.items.map((item,i)=><div className="entry" key={item.id}><span>{i+1}</span><input aria-label="Vorderseite" value={item.front} onChange={e=>updateSet(s=>({...s,items:s.items.map(x=>x.id===item.id?{...x,front:e.target.value}:x)}))}/><input aria-label="Rückseite" value={item.back} onChange={e=>updateSet(s=>({...s,items:s.items.map(x=>x.id===item.id?{...x,back:e.target.value}:x)}))}/><button aria-label="Eintrag löschen" onClick={()=>{if(confirm('Eintrag wirklich löschen?'))updateSet(s=>({...s,items:s.items.filter(x=>x.id!==item.id)}))}}>×</button></div>)}<button onClick={()=>updateSet(s=>({...s,items:[...s.items,{id:uid(),front:'',back:'',kind:'translation'}]}))}>+ Eintrag</button><button className="primary" onClick={()=>startPractice()}>Lernen</button></section>}
+ {tab==='edit'&&<section><div className="breadcrumb"><button onClick={()=>openSet(currentSet?.id||selected)}>← Lernset</button><span>›</span><strong>Karten bearbeiten</strong></div><h1>Einträge kontrollieren</h1><SetPicker sets={sets} selected={selected} setSelected={setSelected}/>{currentSet?.items.map((item,i)=><div className="entry" key={item.id}><span>{i+1}</span><input aria-label="Vorderseite" value={item.front} onChange={e=>updateSet(s=>({...s,items:s.items.map(x=>x.id===item.id?{...x,front:e.target.value}:x)}))}/><input aria-label="Rückseite" value={item.back} onChange={e=>updateSet(s=>({...s,items:s.items.map(x=>x.id===item.id?{...x,back:e.target.value}:x)}))}/><button aria-label="Eintrag löschen" onClick={()=>{if(confirm('Eintrag wirklich löschen?'))updateSet(s=>({...s,items:s.items.filter(x=>x.id!==item.id)}))}}>×</button></div>)}<div className="action-row"><button onClick={()=>updateSet(s=>({...s,items:[...s.items,{id:uid(),front:'',back:'',kind:'translation'}]}))}>+ Eintrag</button><button className="primary" onClick={()=>startPractice()}>Lernen</button></div></section>}
 
  {tab==='import'&&<section className="import-wizard">
  <div className="import-heading"><span className="eyebrow">NEUE LERNKARTEN</span><h1>Aus einem Foto lernen.</h1><p className="muted">Foto auswählen, Inhalte automatisch erkennen und anschliessend überprüfen.</p></div>
@@ -305,7 +326,7 @@ function App(){
  {tab==='settings'&&<section><h1>Eigener Cloud-Speicher</h1><p>Synchronisiere deine Lerninhalte und Versuche über Google Drive oder OneDrive. Lerninhalte bleiben in deinem Cloud-Speicher; die Anmeldung wird sicher auf dem Server verwaltet.</p><div className="two"><button disabled={busy} onClick={()=>void authorizeGoogle()}>{connection?.provider==='google'?'Google Drive erneut autorisieren':localStorage.getItem(LAST_PROVIDER)==='google'?'Google Drive-Zugriff erneuern':'Mit Google Drive verbinden'}</button><button disabled={!config.microsoftClientId} onClick={()=>startLogin('microsoft',config).catch(e=>setError(e.message))}>Mit OneDrive verbinden</button></div>
  {!config.microsoftClientId&&<p className="muted">Nicht alle Cloud-Anbieter sind konfiguriert. Verfügbare Verbindungen kannst du oben auswählen.</p>}
  <p><strong>Status:</strong> {cloudState}</p>
- {connection&&<><button className="primary" disabled={busy} onClick={sync}>{busy?'Synchronisiert …':'Cloud synchronisieren'}</button><button onClick={disconnectCloud}>Verbindung trennen</button></>}
+ {connection&&<div className="action-row"><button className="primary" disabled={busy} onClick={sync}>{busy?'Synchronisiert …':'Cloud synchronisieren'}</button><button onClick={disconnectCloud}>Verbindung trennen</button></div>}
  <p className="muted">Google Drive bleibt auf diesem Gerät auch nach einem Neuladen oder Browser-Neustart verbunden. Zugriffstokens werden automatisch erneuert. Die Gerätesitzung gilt bis zu 180 Tage; bei einem Widerruf durch Google ist eine erneute Anmeldung nötig. Nur auf privaten, vertrauenswürdigen Geräten angemeldet bleiben.</p>
  <h2>✨ KI-Verbindung (BYO OpenAI)</h2>
  <p>Dein API-Key bleibt bei einem Seiten-Refresh erhalten. Optional kannst du ihn auf diesem Gerät auch über einen Browser-Neustart hinaus speichern.</p>
@@ -328,7 +349,23 @@ function App(){
   <p className="muted">Nur für fortgeschrittene Benutzer. Standardmässig verwendet Open Learning den zentralen Dienst, sobald dieser eingerichtet ist.</p>
  </details>
  <h2>Backup</h2><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>JSON exportieren</button><label>JSON importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label><p className="muted">Google-Refresh-Tokens werden verschlüsselt auf dem Server gespeichert. Dieses Gerät speichert eine widerrufbare Sitzung; «Verbindung trennen» beendet sie auf dem Server. Die Lerninhalte bleiben lokal gespeichert; Cloud-Synchronisation wird weiterhin manuell gestartet. Dein OpenAI-Key wird nicht in Google Drive gespeichert.</p></section>}
+ {manage&&<ManageDialog action={manage} library={lib} onCancel={()=>setManage(null)} onSave={saveManaged} onDelete={deleteManaged}/>}
  <footer>Open Learning · MIT · BYOE · <span>Fotos und Inhalte vor Freigabe prüfen</span></footer></main>
+}
+function ManageDialog({action,library,onCancel,onSave,onDelete}:{action:ManageAction;library:Library;onCancel:()=>void;onSave:(name:string)=>void;onDelete:()=>void}){
+ const dialog=useRef<HTMLDialogElement>(null),[name,setName]=useState(action.name);
+ const noun=action.kind==='subject'?'Fach':'Lernset',deleting=action.mode==='delete';
+ const affected=library.sets.filter(s=>action.kind==='subject'?s.subjectId===action.id:s.id===action.id);
+ const cards=affected.reduce((n,s)=>n+s.items.length,0),attempts=library.attempts.filter(a=>affected.some(s=>s.id===a.setId)).length;
+ const duplicate=action.kind==='subject'&&library.subjects.some(s=>s.id!==action.id&&s.name.trim().toLocaleLowerCase()===name.trim().toLocaleLowerCase());
+ useEffect(()=>{dialog.current?.showModal();return()=>dialog.current?.close()},[]);
+ return <dialog ref={dialog} className="manage-dialog" aria-labelledby="manage-title" onCancel={onCancel}>
+  <form onSubmit={e=>{e.preventDefault();if(deleting)onDelete();else if(!duplicate)onSave(name)}}>
+   <h2 id="manage-title">{noun} {deleting?'löschen?':action.mode==='create'?'hinzufügen':'umbenennen'}</h2>
+   {deleting?<><p><strong>„{action.name}“</strong> wird mit {action.kind==='subject'?affected.length+' Lernsets, ':''}{cards} Lernkarten und {attempts} Lernversuchen gelöscht.</p><p className="muted">Das kann nicht rückgängig gemacht werden. Beim nächsten Synchronisieren wird die Löschung auch in der Cloud übernommen.</p></>:<><label htmlFor="manage-name">{action.kind==='subject'?'Name des Fachs':'Titel des Lernsets'}</label><input id="manage-name" autoFocus value={name} maxLength={100} onChange={e=>setName(e.target.value)} placeholder={action.kind==='subject'?'z. B. Geschichte':'z. B. Unité 3'} required aria-describedby={duplicate?'duplicate-name':undefined}/>{duplicate&&<p id="duplicate-name" role="alert" className="danger-text">Ein Fach mit diesem Namen existiert bereits.</p>}</>}
+   <div className="dialog-actions"><button type="button" autoFocus={deleting} onClick={onCancel}>Abbrechen</button><button className={deleting?'danger-button':'primary'} disabled={!deleting&&(!name.trim()||duplicate)}>{deleting?noun+' löschen':action.mode==='create'?noun+' hinzufügen':'Speichern'}</button></div>
+  </form>
+ </dialog>;
 }
 function SetPicker({sets,selected,setSelected}:{sets:SetData[];selected:string;setSelected:(s:string)=>void}){return <label>Lernset <select value={selected} onChange={e=>setSelected(e.target.value)}>{sets.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select></label>}
 createRoot(document.getElementById('root')!).render(<App/>);

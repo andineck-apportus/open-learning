@@ -159,3 +159,24 @@ input,textarea{min-height:49px}
 .key-persistence input{width:19px;height:19px;min-height:19px;flex:none;accent-color:#7653e8;margin:1px 0 0}
 .key-persistence span{flex:1}
 .security-note{max-width:730px;font-size:13px;line-height:1.6;color:#87664d;background:#fff8e9;border:1px solid #efdfbc;border-radius:12px;padding:13px 16px}
+
+
+/* Consistent collection management and action spacing */
+.managed-card{min-width:0;border:1px solid #e6def4;border-radius:18px;background:white;overflow:hidden;box-shadow:0 5px 18px #32224908}
+.managed-card .subject-tile,.managed-card .set-tile{border:0;border-radius:0;box-shadow:none;margin:0}
+.managed-card .subject-tile:hover,.managed-card .set-tile:hover{transform:none;box-shadow:none}
+.card-actions{display:flex;gap:12px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid #eee8f8;background:#fcfaff}
+.card-actions button{font-size:13px;min-height:40px;padding:8px 10px;border:0;background:transparent}
+.danger-text,button.danger-text{color:#b2354b}
+button.danger-text:hover:not(:disabled){color:#8f2135;background:#fff0f2}
+.collection-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:28px;padding-top:22px;border-top:1px solid #eee8f8}
+.collection-toolbar h2{margin:0}
+.action-row,.dialog-actions,.card-actions{gap:12px}
+section>button+button{margin-inline-start:12px}
+.error{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.manage-dialog{width:min(520px,calc(100% - 32px));max-height:calc(100dvh - 40px);overflow:auto;border:1px solid #e6def4;border-radius:22px;padding:28px;color:#302746;box-shadow:0 24px 90px #30234b35}
+.manage-dialog::backdrop{background:#261a46a3;backdrop-filter:blur(3px)}
+.manage-dialog input{width:100%}.manage-dialog label{margin-bottom:8px}
+.dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;margin-top:28px}
+.danger-button{background:#b2354b;border-color:#b2354b;color:white}.danger-button:hover:not(:disabled){background:#90283b;color:white}
+@media(max-width:600px){.collection-toolbar{align-items:stretch}.collection-toolbar>.action-row{width:100%}.collection-toolbar button{flex:1}.manage-dialog{padding:22px}.dialog-actions button{flex:1}.section-heading>.action-row{width:100%}section>button+button{margin-inline-start:0;margin-top:12px}}
