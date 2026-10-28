@@ -9,7 +9,7 @@ const config:OAuthConfig={googleClientId:import.meta.env.VITE_GOOGLE_CLIENT_ID||
 const GSESSION='ol-google-session',API_SESSION='ol-api-session',API_LOCAL='ol-api-remembered',API_REMEMBER='ol-api-persist',LAST_PROVIDER='ol-last-cloud-provider';
 const download=(filename:string,data:string)=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.href=u;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 function App(){
- const [tab,setTab]=useState<'home'|'subject'|'set'|'edit'|'learn'|'settings'|'import'>('home');
+ const [tab,setTab]=useState<'home'|'subject'|'subject-edit'|'set'|'edit'|'learn'|'settings'|'import'>('home');
  const [selected,setSelected]=useState('unite2'),[selectedSubject,setSelectedSubject]=useState('french');
  const [connection,setConnection]=useState<Connection|null>(null);
  const {lib,modify,sync,pause:pauseSync,status:syncStatus,syncing,syncError}=useAutoSync(connection);
@@ -82,7 +82,7 @@ function App(){
  useEffect(()=>{if(currentSet)chooseSetDirection(currentSet)},[currentSet?.id,currentSet?.frontLanguage,currentSet?.backLanguage,nativeLanguage]);
  function openSubject(id:string){setSelectedSubject(id);setTab('subject');setNotice('')}
  function openSet(id:string){setSelected(id);const matching=sets.find(x=>x.id===id);if(matching){setSelectedSubject(matching.subjectId);chooseSetDirection(matching)}setTab('set');setNotice('')}
- function openImport(){const id=tab==='subject'?activeSubject?.id||'':currentSet?.subjectId||activeSubject?.id||'';setTargetSubject(id);setImportSubjectChoice(id||'__new__');setImportDestination('__new__');setTab('import')}
+ function openImport(){const id=(tab==='subject'||tab==='subject-edit')?activeSubject?.id||'':currentSet?.subjectId||activeSubject?.id||'';setTargetSubject(id);setImportSubjectChoice(id||'__new__');setImportDestination('__new__');setTab('import')}
  const subjectIcon=(name:string)=>/franz/i.test(name)?'🇫🇷':/engl/i.test(name)?'🇬🇧':/geschicht/i.test(name)?'🏛️':/bio/i.test(name)?'🌱':/geo/i.test(name)?'🌍':/mathe/i.test(name)?'∑':'📚';
  function updateSet(fn:(s:SetData)=>SetData){if(!currentSet)return;modify(d=>({...d,sets:d.sets.map(s=>s.id===currentSet.id?{...fn(s),updatedAt:new Date().toISOString()}:s)}))}
  const total=lib?.attempts.length||0;
@@ -224,11 +224,23 @@ function App(){
  </div>}
  {tab==='subject'&&activeSubject&&<div className="page-stack">
   <div className="breadcrumb"><button onClick={()=>setTab('home')}>Alle Fächer</button><span>›</span><strong>{activeSubject.name}</strong></div>
-  <section className="content-panel"><div className="section-heading"><div><span className="subject-tile-icon">{subjectIcon(activeSubject.name)}</span><span className="eyebrow">FACH</span><h1>{activeSubject.name}</h1><p className="muted">{subjectSets.length} Lernsets</p></div><details className="subject-manage"><summary>Verwalten</summary><div className="action-row"><button onClick={()=>setManage({kind:"subject",mode:"rename",id:activeSubject.id,name:activeSubject.name})}>Umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:"subject",mode:"delete",id:activeSubject.id,name:activeSubject.name})}>Löschen</button></div></details></div><div className="collection-toolbar"><h2>Lernsets</h2><div className="action-row"><button onClick={openImport}>Foto importieren</button><button className="primary" onClick={()=>setManage({kind:"set",mode:"create",name:""})}>+ Lernset hinzufügen</button></div></div>
+  <section className="content-panel"><div className="flat-toolbar subject-heading"><div className="subject-name"><span className="subject-tile-icon">{subjectIcon(activeSubject.name)}</span><div><h1>{activeSubject.name}</h1><p className="muted">{subjectSets.length} Lernsets</p></div></div><button className="subtle-button" onClick={()=>setTab('subject-edit')}><UiIcon kind="edit"/> Bearbeiten</button></div>
    {subjectSets.length?<div className="set-directory">{subjectSets.map(st=><article className="managed-card" key={st.id}><button className="set-tile" onClick={()=>openSet(st.id)}>
     <span className="set-tile-symbol" aria-hidden="true"><UiIcon kind="book"/></span><span className="set-tile-info"><strong>{st.title}</strong><small>{st.items.length} Lernkarten · {lib.attempts.filter(r=>r.setId===st.id).length} Lernversuche</small></span><span className="tile-arrow" aria-hidden="true"><UiIcon kind="chevron"/></span>
-   </button></article>)}</div>:<div className="empty-state"><span>📚</span><h3>Hier ist noch Platz für Neues.</h3><p>Erstelle dein erstes Lernset oder fotografiere eine Schulbuchseite.</p><button onClick={openImport}>Foto importieren</button></div>}
+   </button></article>)}</div>:<div className="empty-state"><h3>Noch keine Lernsets</h3><button onClick={()=>setTab('subject-edit')}>Bearbeiten</button></div>}
  
+  </section>
+ </div>}
+ {tab==='subject-edit'&&activeSubject&&<div className="page-stack">
+  <div className="breadcrumb"><button onClick={()=>openSubject(activeSubject.id)}>← {activeSubject.name}</button></div>
+  <section className="content-panel subject-edit-page">
+   <div className="flat-toolbar"><h1>Fach bearbeiten</h1><button className="primary" onClick={()=>openSubject(activeSubject.id)}>Fertig</button></div>
+   <div className="edit-management">
+    <div className="edit-management-row"><strong>{activeSubject.name}</strong><button onClick={()=>setManage({kind:'subject',mode:'rename',id:activeSubject.id,name:activeSubject.name})}>Umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:'subject',mode:'delete',id:activeSubject.id,name:activeSubject.name})}>Löschen</button></div>
+   </div>
+   <h2>Lernsets</h2>
+   <div className="subject-edit-actions"><button className="primary" onClick={()=>setManage({kind:'set',mode:'create',name:''})}>+ Lernset hinzufügen</button><button onClick={openImport}><UiIcon kind="camera"/> Foto importieren</button></div>
+   <div className="subject-edit-list">{subjectSets.map(st=><div className="subject-edit-item" key={st.id}><span className="set-tile-symbol"><UiIcon kind="book"/></span><span className="subject-edit-item-name">{st.title}</span><button onClick={()=>openSet(st.id)}>Öffnen</button><button onClick={()=>setManage({kind:'set',mode:'rename',id:st.id,name:st.title})}>Umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:'set',mode:'delete',id:st.id,name:st.title})}>Löschen</button></div>)}</div>
   </section>
  </div>}
  {tab==='set'&&currentSet&&<div className="page-stack">
@@ -382,7 +394,7 @@ function UiIcon({kind}:{kind:'home'|'camera'|'settings'|'book'|'chevron'|'back'|
  const path={
  home:<><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-7h6v7"/></>,
  camera:<><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></>,
- settings:<><path d="M12 2v3m0 14v3M4.9 4.9 7 7m10 10 2.1 2.1M2 12h3m14 0h3M4.9 19.1 7 17M17 7l2.1-2.1"/><circle cx="12" cy="12" r="4"/></>,
+ settings:<><path d="M10.5 2h3l.5 2.2 1.8.8 1.9-1.3 2.1 2.1-1.3 1.9.8 1.8 2.2.5v3l-2.2.5-.8 1.8 1.3 1.9-2.1 2.1-1.9-1.3-1.8.8-.5 2.2h-3l-.5-2.2-1.8-.8-1.9 1.3-2.1-2.1 1.3-1.9-.8-1.8-2.2-.5v-3l2.2-.5.8-1.8-1.3-1.9 2.1-2.1 1.9 1.3 1.8-.8z"/><circle cx="12" cy="12" r="3.2"/></>,
  book:<><path d="M4 5a2 2 0 0 1 2-2h13v17H6a2 2 0 0 1-2-2z"/><path d="M4 17a2 2 0 0 1 2-2h13"/></>,
  chevron:<path d="m9 6 6 6-6 6"/>,
  back:<path d="m15 18-6-6 6-6"/>,
