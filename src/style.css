@@ -266,3 +266,5 @@ section,.content-panel,.focus-panel{padding:14px}
 .method-symbol{font-size:18px}
 }
 @media(max-width:390px){.method-grid{gap:4px}.method-tile strong{font-size:10px}.pill{font-size:10px}}
+
+.ui-icon{display:inline-block;vertical-align:-4px;flex:none}.main-nav .ui-icon{margin-right:5px}.set-tile-symbol .ui-icon{width:20px;height:20px}.tile-arrow .ui-icon{width:17px;height:17px}.upload-symbol .ui-icon{width:28px;height:28px}
