@@ -202,9 +202,9 @@ function App(){
  </header>
  <div className="sync-status" role="status" aria-live="polite"><span className={syncing?"sync-indicator syncing":"sync-indicator"}/>{syncStatus}{syncError&&<span className="sync-error">{syncError}</span>}</div>
  <nav className="main-nav" aria-label="Hauptnavigation">
-  <button onClick={()=>setTab('home')} className={tab==='home'?'active':''}><span aria-hidden="true">⌂</span> Übersicht</button>
-  <button onClick={openImport} className={tab==='import'?'active':''}><span aria-hidden="true">◎</span> Importieren</button>
-  <button onClick={()=>setTab('settings')} className={tab==='settings'?'active':''}><span aria-hidden="true">⚙</span> Einstellungen</button>
+  <button onClick={()=>setTab('home')} className={tab==='home'?'active':''}><UiIcon kind="home"/> Übersicht</button>
+  <button onClick={openImport} className={tab==='import'?'active':''}><UiIcon kind="camera"/> Import</button>
+  <button onClick={()=>setTab('settings')} className={tab==='settings'?'active':''}><UiIcon kind="settings"/> Einstellungen</button>
  </nav>
  {error&&<div role="alert" className="error"><span>{error}</span><button onClick={()=>setError('')}>Schliessen</button></div>}{notice&&<p className="muted" role="status">{notice}</p>}
  {tab==='home'&&<div className="page-stack">
@@ -218,7 +218,7 @@ function App(){
   <div className="breadcrumb"><button onClick={()=>setTab('home')}>Alle Fächer</button><span>›</span><strong>{activeSubject.name}</strong></div>
   <section className="content-panel"><div className="section-heading"><div><span className="subject-tile-icon">{subjectIcon(activeSubject.name)}</span><span className="eyebrow">FACH</span><h1>{activeSubject.name}</h1><p className="muted">{subjectSets.length} Lernsets</p></div><div className="action-row"><button onClick={()=>setManage({kind:"subject",mode:"rename",id:activeSubject.id,name:activeSubject.name})}>Fach umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:"subject",mode:"delete",id:activeSubject.id,name:activeSubject.name})}>Fach löschen</button></div></div><div className="collection-toolbar"><h2>Lernsets</h2><div className="action-row"><button onClick={openImport}>Foto importieren</button><button className="primary" onClick={()=>setManage({kind:"set",mode:"create",name:""})}>+ Lernset hinzufügen</button></div></div>
    {subjectSets.length?<div className="set-directory">{subjectSets.map(st=><article className="managed-card" key={st.id}><button className="set-tile" onClick={()=>openSet(st.id)}>
-    <span className="set-tile-symbol" aria-hidden="true">▤</span><span className="set-tile-info"><strong>{st.title}</strong><small>{st.items.length} Lernkarten · {lib.attempts.filter(r=>r.setId===st.id).length} Lernversuche</small></span><span className="tile-arrow" aria-hidden="true">→</span>
+    <span className="set-tile-symbol" aria-hidden="true"><UiIcon kind="book"/></span><span className="set-tile-info"><strong>{st.title}</strong><small>{st.items.length} Lernkarten · {lib.attempts.filter(r=>r.setId===st.id).length} Lernversuche</small></span><span className="tile-arrow" aria-hidden="true"><UiIcon kind="chevron"/></span>
    </button><div className="card-actions"><button aria-label={st.title+" umbenennen"} onClick={()=>setManage({kind:"set",mode:"rename",id:st.id,name:st.title})}>Umbenennen</button><button className="danger-text" aria-label={st.title+" löschen"} onClick={()=>setManage({kind:"set",mode:"delete",id:st.id,name:st.title})}>Löschen</button></div></article>)}</div>:<div className="empty-state"><span>📚</span><h3>Hier ist noch Platz für Neues.</h3><p>Erstelle dein erstes Lernset oder fotografiere eine Schulbuchseite.</p><button onClick={openImport}>Foto importieren</button></div>}
  
   </section>
@@ -257,7 +257,7 @@ function App(){
   <input ref={cameraInput} className="visually-hidden" tabIndex={-1} type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files?.[0];if(f)preparePhoto(f);e.target.value=''}}/>
   <input ref={uploadInput} className="visually-hidden" tabIndex={-1} type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>{const f=e.target.files?.[0];if(f)preparePhoto(f);e.target.value=''}}/>
   <div className={'drop-zone '+(isDragging?'is-dragging':'')} onDragEnter={e=>{e.preventDefault();setIsDragging(true)}} onDragOver={e=>e.preventDefault()} onDragLeave={e=>{e.preventDefault();setIsDragging(false)}} onDrop={e=>{e.preventDefault();setIsDragging(false);const f=e.dataTransfer.files[0];if(f)preparePhoto(f)}}>
-   {image?<img className="upload-preview" src={image} alt="Ausgewähltes Schulbuchfoto"/>:<div className="upload-symbol" aria-hidden="true">📷</div>}
+   {image?<img className="upload-preview" src={image} alt="Ausgewähltes Schulbuchfoto"/>:<div className="upload-symbol" aria-hidden="true"><UiIcon kind="camera"/></div>}
    <h2>{importStage==='analyzing'?'Dein Lernstoff wird erkannt …':image?'Foto ausgewählt':'Hier beginnt dein Lernset'}</h2>
 
    <div className="upload-actions"><button className="primary" disabled={busy} onClick={()=>cameraInput.current?.click()}>Kamera</button><button disabled={busy} onClick={()=>uploadInput.current?.click()}>Datei auswählen</button></div>
@@ -353,6 +353,16 @@ function ManageDialog({action,library,onCancel,onSave,onDelete}:{action:ManageAc
    <div className="dialog-actions"><button type="button" autoFocus={deleting} onClick={onCancel}>Abbrechen</button><button className={deleting?'danger-button':'primary'} disabled={!deleting&&(!name.trim()||duplicate)}>{deleting?noun+' löschen':action.mode==='create'?noun+' hinzufügen':'Speichern'}</button></div>
   </form>
  </dialog>;
+}
+function UiIcon({kind}:{kind:'home'|'camera'|'settings'|'book'|'chevron'}){
+ const path={
+ home:<><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-7h6v7"/></>,
+ camera:<><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></>,
+ settings:<><path d="M12 2v3m0 14v3M4.9 4.9 7 7m10 10 2.1 2.1M2 12h3m14 0h3M4.9 19.1 7 17M17 7l2.1-2.1"/><circle cx="12" cy="12" r="4"/></>,
+ book:<><path d="M4 5a2 2 0 0 1 2-2h13v17H6a2 2 0 0 1-2-2z"/><path d="M4 17a2 2 0 0 1 2-2h13"/></>,
+ chevron:<path d="m9 6 6 6-6 6"/>
+ }[kind];
+ return <svg className="ui-icon" aria-hidden="true" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{path}</svg>
 }
 function SetPicker({sets,selected,setSelected}:{sets:SetData[];selected:string;setSelected:(s:string)=>void}){return <label>Lernset <select value={selected} onChange={e=>setSelected(e.target.value)}>{sets.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select></label>}
 createRoot(document.getElementById('root')!).render(<App/>);
