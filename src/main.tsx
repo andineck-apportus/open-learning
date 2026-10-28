@@ -208,8 +208,12 @@ function App(){
  </nav>
  {error&&<div role="alert" className="error"><span>{error}</span><button onClick={()=>setError('')}>Schliessen</button></div>}{notice&&<p className="muted" role="status">{notice}</p>}
  {tab==='home'&&<div className="page-stack">
- <div className="flat-toolbar"><h1>Fächer</h1><button className="primary" onClick={openImport}>+ Import</button></div>
-}
+ <div className="flat-toolbar"><h1>Fächer</h1><div className="action-row"><button className="primary" onClick={()=>setManage({kind:'subject',mode:'create',name:''})}>+ Fach</button><button onClick={openImport}>Import</button></div></div>
+ <section className="content-panel"><div className="subject-directory">{lib.subjects.map(sub=><article className="managed-card" key={sub.id}>
+ <button className="subject-tile" onClick={()=>openSubject(sub.id)}><span className="subject-tile-icon">{subjectIcon(sub.name)}</span><span className="subject-tile-info"><strong>{sub.name}</strong><small>{sets.filter(x=>x.subjectId===sub.id).length} Sets</small></span><span className="tile-arrow">›</span></button>
+ <div className="card-actions"><button onClick={()=>setManage({kind:'subject',mode:'rename',id:sub.id,name:sub.name})}>Umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:'subject',mode:'delete',id:sub.id,name:sub.name})}>Löschen</button></div>
+ </article>)}</div></section>
+ </div>}
  {tab==='subject'&&activeSubject&&<div className="page-stack">
   <div className="breadcrumb"><button onClick={()=>setTab('home')}>Alle Fächer</button><span>›</span><strong>{activeSubject.name}</strong></div>
   <section className="content-panel"><div className="section-heading"><div><span className="subject-tile-icon">{subjectIcon(activeSubject.name)}</span><span className="eyebrow">FACH</span><h1>{activeSubject.name}</h1><p className="muted">{subjectSets.length} Lernsets</p></div><div className="action-row"><button onClick={()=>setManage({kind:"subject",mode:"rename",id:activeSubject.id,name:activeSubject.name})}>Fach umbenennen</button><button className="danger-text" onClick={()=>setManage({kind:"subject",mode:"delete",id:activeSubject.id,name:activeSubject.name})}>Fach löschen</button></div></div><div className="collection-toolbar"><h2>Lernsets</h2><div className="action-row"><button onClick={openImport}>Foto importieren</button><button className="primary" onClick={()=>setManage({kind:"set",mode:"create",name:""})}>+ Lernset hinzufügen</button></div></div>
