@@ -79,6 +79,7 @@ function App(){
    const normal=(x:string)=>x.trim().toLocaleLowerCase('de').replace(/\s*\([^)]*\)\s*/g,'');
    setDirection(isQa?'front-back':normal(to)===normal(nativeLanguage)&&normal(from)!==normal(nativeLanguage)?'back-front':'front-back');
  }
+ useEffect(()=>{if(currentSet)chooseSetDirection(currentSet)},[currentSet?.id,currentSet?.frontLanguage,currentSet?.backLanguage,nativeLanguage]);
  function openSubject(id:string){setSelectedSubject(id);setTab('subject');setNotice('')}
  function openSet(id:string){setSelected(id);const matching=sets.find(x=>x.id===id);if(matching){setSelectedSubject(matching.subjectId);chooseSetDirection(matching)}setTab('set');setNotice('')}
  function openImport(){const id=tab==='subject'?activeSubject?.id||'':currentSet?.subjectId||activeSubject?.id||'';setTargetSubject(id);setImportSubjectChoice(id||'__new__');setImportDestination('__new__');setTab('import')}
@@ -239,8 +240,9 @@ function App(){
     {([['flip','▣','Lernkarten'],['write','✎','Schreiben'],['test','✓','Prüfung']] as const).map(([value,symbol,name])=><button key={value} aria-pressed={studyMode===value} className={'method-tile '+(studyMode===value?'chosen':'')} onClick={()=>setStudyMode(value)}><span className="method-symbol">{symbol}</span><strong>{name}</strong></button>)}
    </div>
    <div className="direction-choice"><label>Abfragerichtung<select value={direction} onChange={e=>setDirection(e.target.value as typeof direction)}>
+    {direction==='back-front'&&isTranslationSet&&<option value="back-front">{directionText('back-front')}</option>}
     <option value="front-back">{directionText('front-back')}</option>
-    {isTranslationSet&&<option value="back-front">{directionText('back-front')}</option>}
+    {direction!=='back-front'&&isTranslationSet&&<option value="back-front">{directionText('back-front')}</option>}
     {isTranslationSet&&<option value="mixed">Beide Richtungen (gemischt)</option>}
    </select></label></div>
    <button className="primary start-learning" disabled={!currentSet.items.length} onClick={()=>startPractice()}>Lernen starten <span aria-hidden="true">→</span></button>
