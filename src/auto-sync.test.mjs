@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {initialLibrary,mergeLibraries} from './model.ts';
-const bundled=await build({entryPoints:[new URL('./use-auto-sync.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'test-adapters',setup(b){
+const bundled=await build({entryPoints:[decodeURIComponent(new URL('./use-auto-sync.ts',import.meta.url).pathname)],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'test-adapters',setup(b){
  b.onResolve({filter:/^(react|\.\/local|\.\/google-session|\.\/replica-cloud)$/},a=>({path:a.path,namespace:'fixture'}));
  b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:a.path==='react'?`export const useState=v=>{const f=globalThis.fixture,i=f.states.length;f.states.push(v);return [v,n=>f.states[i]=n]};export const useRef=v=>({current:v});export const useEffect=f=>globalThis.fixture.effects.push(f);`:a.path==='./local'?`export const loadLocal=async()=>globalThis.fixture.disk;export const saveLocal=async d=>{const f=globalThis.fixture;f.disk=f.merge(f.disk,d);return f.disk};`:a.path==='./google-session'?`export const googleAccessToken=async()=>'test';export const hasGoogleSession=()=>true;`:`export class CloudError extends Error{};export const clearReplicaCache=()=>{};export const readReplicas=async()=>{const f=globalThis.fixture;if(f.fail)throw Error('Network down');return {data:f.remote,ownId:'own'}};export const writeReplica=async(c,id,data)=>{const f=globalThis.fixture;f.writes.push(data);if(f.hold)await f.hold;f.remote=data};`}));
 }}]});

@@ -1,3 +1,6 @@
+import {LearningProgress} from './LearningProgress';
+import {learningLevels,preferredDirection} from './learning-engine';
+import {Practice} from './Practice';
 import React,{useEffect,useMemo,useState,useRef} from 'react';import{createRoot}from'react-dom/client';import './style.css';
 import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries,deleteLibraryEntity,setLanguageLabels}from './model';
 import {useAutoSync} from './use-auto-sync';import{startLogin,finishLogin,type Provider,type OAuthConfig}from './oauth';import{type Connection}from './cloud';
@@ -9,7 +12,7 @@ const config:OAuthConfig={googleClientId:import.meta.env.VITE_GOOGLE_CLIENT_ID||
 const GSESSION='ol-google-session',API_SESSION='ol-api-session',API_LOCAL='ol-api-remembered',API_REMEMBER='ol-api-persist',LAST_PROVIDER='ol-last-cloud-provider';
 const download=(filename:string,data:string)=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.href=u;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 function App(){
- const [tab,setTab]=useState<'home'|'subject'|'subject-edit'|'set'|'edit'|'learn'|'settings'|'import'>('home');
+ const [tab,setTab]=useState<'home'|'subject'|'subject-edit'|'set'|'edit'|'settings'|'import'>('home');
  const [selected,setSelected]=useState('unite2'),[selectedSubject,setSelectedSubject]=useState('french');
  const [connection,setConnection]=useState<Connection|null>(null);
  const {lib,modify,sync,pause:pauseSync,status:syncStatus,syncing,syncError}=useAutoSync(connection);
@@ -18,8 +21,6 @@ function App(){
  const [direction,setDirection]=useState<'mixed'|'front-back'|'back-front'>('back-front');
  const [nativeLanguage,setNativeLanguage]=useState(()=>localStorage.getItem('ol-native-language')||'Deutsch');
  useEffect(()=>{localStorage.setItem('ol-native-language',nativeLanguage)},[nativeLanguage]);
- const [studyMode,setStudyMode]=useState<'flip'|'write'|'test'>('flip'),[revealed,setRevealed]=useState(false),[showExamples,setShowExamples]=useState(false);
- const [tasks,setTasks]=useState<Task[]>([]),[pos,setPos]=useState(0),[answer,setAnswer]=useState(''),[attempt,setAttempt]=useState(1),[stage,setStage]=useState<'ask'|'hint'|'correct'|'wrong'|'done'>('ask'),[roundResults,setRoundResults]=useState<Attempt[]>([]);
  const [draft,setDraft]=useState<Item[]>([]),[image,setImage]=useState<string|null>(null),[importText,setImportText]=useState(''),[importStatus,setImportStatus]=useState('');
  const [importStage,setImportStage]=useState<'photo'|'analyzing'|'review'>('photo');
  const [isDragging,setIsDragging]=useState(false);
@@ -85,15 +86,6 @@ function App(){
  function openImport(){const id=(tab==='subject'||tab==='subject-edit')?activeSubject?.id||'':currentSet?.subjectId||activeSubject?.id||'';setTargetSubject(id);setImportSubjectChoice(id||'__new__');setImportDestination('__new__');setTab('import')}
  const subjectIcon=(name:string)=>/franz/i.test(name)?'🇫🇷':/engl/i.test(name)?'🇬🇧':/geschicht/i.test(name)?'🏛️':/bio/i.test(name)?'🌱':/geo/i.test(name)?'🌍':/mathe/i.test(name)?'∑':'📚';
  function updateSet(fn:(s:SetData)=>SetData){if(!currentSet)return;modify(d=>({...d,sets:d.sets.map(s=>s.id===currentSet.id?{...fn(s),updatedAt:new Date().toISOString()}:s)}))}
- const total=lib?.attempts.length||0;
- function startPractice(items?:Task[]){if(!currentSet)return;const q=items||currentSet.items.flatMap(item=>direction==='mixed'&&item.kind==='translation'?[{item,setId:currentSet.id,direction:'front-back' as const},{item,setId:currentSet.id,direction:'back-front' as const}]:[{item,setId:currentSet.id,direction:direction==='back-front'&&item.kind==='translation'?'back-front' as const:'front-back' as const}]);setTasks(q);setPos(0);setAnswer('');setAttempt(1);setRevealed(false);setStage('ask');setRoundResults([]);setTab('learn');setNotice('')}
- const task=tasks[pos],prompt=task?(task.direction==='front-back'?task.item.front:task.item.back):'',expected=task?(task.direction==='front-back'?task.item.back:task.item.front):'';
- const options=task?[...possibleAnswers(expected),...(task.direction==='front-back'?(task.item.alternatives||[]):[])]:[];
- const correct=options.some(s=>normalize(s)===normalize(answer));
- const hint=()=>{const expectedWord=options[0]||'';if(normalize(answer).length<normalize(expectedWord).length)return 'In deiner Antwort fehlt möglicherweise etwas.';if(normalize(answer).length>normalize(expectedWord).length)return 'Prüfe, ob etwas zu viel geschrieben ist.';return 'Prüfe die Schreibweise und achte auf Akzente und Artikel. Anfangsbuchstabe: '+expectedWord.slice(0,1)};
- function check(){if(!task||!answer.trim())return;if(correct||attempt===2||studyMode==='test'){const r:Attempt={id:uid(),itemId:task.item.id,setId:task.setId,direction:task.direction,correct,attempts:attempt,createdAt:new Date().toISOString()};modify(d=>({...d,attempts:[...d.attempts,r]}));setRoundResults(v=>[...v,r]);setStage(correct?'correct':'wrong')}else{setAttempt(2);setStage('hint');setAnswer('')}}
- function rateFlip(isRight:boolean){if(!task)return;const r:Attempt={id:uid(),itemId:task.item.id,setId:task.setId,direction:task.direction,correct:isRight,attempts:1,createdAt:new Date().toISOString()};modify(d=>({...d,attempts:[...d.attempts,r]}));setRoundResults(v=>[...v,r]);next()}
- function next(){if(pos+1===tasks.length)setStage('done');else{setPos(p=>p+1);setAnswer('');setAttempt(1);setRevealed(false);setStage('ask')}}
  function saveManaged(name:string){
   if(!manage||!name.trim())return;
   const now=new Date().toISOString();
@@ -199,12 +191,7 @@ function App(){
   setImportStatus('');setSuggestedTitle('');setDetectedSubject('');setImportSubjectChoice('__new__');setImportDestination('__new__');
  }
  async function restore(file:File){try{const d=JSON.parse(await file.text());if(d.schema!==1||!Array.isArray(d.sets)||!Array.isArray(d.attempts)||!Array.isArray(d.subjects))throw Error('Ungültiges Format');modify(x=>mergeLibraries(x,d));setNotice('Importiertes Backup lokal zusammengeführt.')}catch(e){setError('Backup-Import fehlgeschlagen: '+String(e))}}
- const correctCount=roundResults.filter(r=>r.correct).length;
- const successRate=roundResults.length?correctCount/roundResults.length:0;
- const fireConfetti=roundResults.length>0&&successRate>5/6;
- const celebrationTitle=successRate===1?'Wahnsinn – alles richtig!':fireConfetti?'Fantastisch gemacht!':successRate>=0.6?'Richtig gut drangeblieben!':'Stark, dass du geübt hast!';
- const celebrationMessage=successRate===1?'Das war eine perfekte Runde. Dein Einsatz hat sich gelohnt!':fireConfetti?'Über fünf Sechstel richtig – das ist eine richtig starke Leistung!':successRate>=0.6?'Du hast schon viel geschafft. Mit jeder Runde wirst du sicherer.':'Jedes geübte Wort zählt. Die schwierigen Karten machen wir beim nächsten Mal leichter!';
-  const stats=useMemo(()=>{if(!lib)return[];return lib.sets.map(s=>{const rs=lib.attempts.filter(r=>r.setId===s.id);const last=new Map(rs.map(r=>[r.itemId+'|'+r.direction,r]));const mastered=[...last.values()].filter(r=>r.correct&&r.attempts===1).length;return{id:s.id,total:s.items.length,tries:rs.length,mastered}})},[lib]);
+ const levelsBySet=useMemo(()=>new Map((lib?.sets||[]).map(s=>{const labels=setLanguageLabels(s,lib?.subjects.find(sub=>sub.id===s.subjectId)?.name||'');return [s.id,learningLevels(s,lib?.attempts||[],preferredDirection(labels,nativeLanguage))]})),[lib,nativeLanguage]);
  if(!lib)return <main><p>{syncError||'Open Learning wird geladen …'}</p>{syncError&&<button onClick={()=>location.reload()}>Erneut versuchen</button>}</main>;
  return <main>
  <header className="app-header compact-app-header">
@@ -226,7 +213,7 @@ function App(){
   <div className="breadcrumb"><button onClick={()=>setTab('home')}>Alle Fächer</button><span>›</span><strong>{activeSubject.name}</strong></div>
   <section className="content-panel"><div className="flat-toolbar subject-heading"><div className="subject-name"><span className="subject-tile-icon">{subjectIcon(activeSubject.name)}</span><div><h1>{activeSubject.name}</h1><p className="muted">{subjectSets.length} Lernsets</p></div></div><button className="subtle-button" onClick={()=>setTab('subject-edit')}><UiIcon kind="edit"/> Bearbeiten</button></div>
    {subjectSets.length?<div className="set-directory">{subjectSets.map(st=><article className="managed-card" key={st.id}><button className="set-tile" onClick={()=>openSet(st.id)}>
-    <span className="set-tile-symbol" aria-hidden="true"><UiIcon kind="book"/></span><span className="set-tile-info"><strong>{st.title}</strong><small>{st.items.length} Lernkarten · {lib.attempts.filter(r=>r.setId===st.id).length} Lernversuche</small></span><span className="tile-arrow" aria-hidden="true"><UiIcon kind="chevron"/></span>
+    <span className="set-tile-symbol" aria-hidden="true"><UiIcon kind="book"/></span><span className="set-tile-info"><strong>{st.title}</strong><small>{st.items.length} Karten</small><LearningProgress levels={levelsBySet.get(st.id)||[]} compact/></span><span className="tile-arrow" aria-hidden="true"><UiIcon kind="chevron"/></span>
    </button></article>)}</div>:<div className="empty-state"><h3>Noch keine Lernsets</h3><button onClick={()=>setTab('subject-edit')}>Bearbeiten</button></div>}
  
   </section>
@@ -248,16 +235,7 @@ function App(){
   <section className="focus-panel set-detail">
    <div className="flat-toolbar set-title-row"><div><h1>{currentSet.title}</h1><p className="muted">{currentSet.items.length} Karten</p></div>
     <button className="subtle-button" onClick={()=>setTab('edit')}><UiIcon kind="edit"/> Bearbeiten</button></div>
-   <div className="method-grid">
-    {([['flip','▣','Lernkarten'],['write','✎','Schreiben'],['test','✓','Prüfung']] as const).map(([value,symbol,name])=><button key={value} aria-pressed={studyMode===value} className={'method-tile '+(studyMode===value?'chosen':'')} onClick={()=>setStudyMode(value)}><span className="method-symbol">{symbol}</span><strong>{name}</strong></button>)}
-   </div>
-   <div className="direction-choice"><label>Abfragerichtung<select value={direction} onChange={e=>setDirection(e.target.value as typeof direction)}>
-    {direction==='back-front'&&isTranslationSet&&<option value="back-front">{directionText('back-front')}</option>}
-    <option value="front-back">{directionText('front-back')}</option>
-    {direction!=='back-front'&&isTranslationSet&&<option value="back-front">{directionText('back-front')}</option>}
-    {isTranslationSet&&<option value="mixed">Beide Richtungen (gemischt)</option>}
-   </select></label></div>
-   <button className="primary start-learning" disabled={!currentSet.items.length} onClick={()=>startPractice()}>Lernen starten <span aria-hidden="true">→</span></button>
+   <Practice key={currentSet.id} set={currentSet} labels={[frontLabel,backLabel]} attempts={lib?.attempts||[]} nativeLanguage={nativeLanguage} onRecord={records=>modify(d=>({...d,attempts:[...d.attempts,...records]}))}/>
    {!currentSet.items.length&&<p className="muted">Noch keine Karten vorhanden.</p>}
   </section>
  </div>}
@@ -321,22 +299,6 @@ function App(){
  </div>}
  </section>}
 
- {tab==='learn'&&<section className="study-page">
- <div className="study-top"><button className="subtle-button" onClick={()=>setTab('set')}>← {currentSet?.title||'Lernset'}</button><span className="eyebrow">{studyMode==='flip'?'LERNKARTEN':studyMode==='write'?'SCHREIBTRAINING':'LERNKONTROLLE'}</span></div>
- {stage==='done'?<div className="complete-screen">
- {fireConfetti&&<div className="confetti-cannon" aria-hidden="true">{Array.from({length:58},(_,i)=><i key={i} style={{'--particle':i,'--angle':(i*137.5)%360+'deg','--distance':(130+(i%8)*19)+'px','--delay':(i%8)*0.035+'s','--tone':i%6} as React.CSSProperties}/>)}</div>}
- <span className="big-emoji">{successRate===1?'🏆':fireConfetti?'🎊':'🌟'}</span>
- <span className="eyebrow">LERNRUNDE ABGESCHLOSSEN</span>
- <h1>{celebrationTitle}</h1>
- <p className="celebration-message">{celebrationMessage}</p>
- <p className="score-line"><strong>{correctCount} von {roundResults.length}</strong> Aufgaben richtig ({Math.round(successRate*100)} %)</p><div className="result-grid"><div><strong>{roundResults.filter(r=>r.correct&&r.attempts===1).length}</strong><span>Direkt richtig</span></div><div><strong>{roundResults.filter(r=>r.correct&&r.attempts===2).length}</strong><span>Mit Hinweis</span></div><div><strong>{roundResults.filter(r=>!r.correct).length}</strong><span>Noch üben</span></div></div><div className="action-row center"><button className="primary" onClick={()=>startPractice(tasks.filter((_,i)=>{const r=roundResults[i];return r&&(!r.correct||r.attempts===2)}))} disabled={!roundResults.some(r=>!r.correct||r.attempts===2)}>Schwierige wiederholen ↻</button><button onClick={()=>startPractice()}>Ganzes Set neu starten</button></div></div>
- :task?<><div className="study-progress"><span>Karte {pos+1} von {tasks.length}</span><span>{Math.round(pos/tasks.length*100)}%</span></div><progress value={pos} max={tasks.length}/>
- <div className="learning-card">{task.item.example&&<label className="show-example"><input type="checkbox" checked={showExamples} onChange={e=>setShowExamples(e.target.checked)}/> Beispielsatz</label>}<span className="eyebrow">{task.item.kind==='translation'?directionText(task.direction):'FRAGE → ANTWORT'}</span><h1>{prompt}</h1>
- {studyMode==='flip'?<div className="reveal-area">{revealed?<><div className="divider-short"/><span className="eyebrow">LÖSUNG</span><h2>{expected}</h2>{showExamples&&task.item.example&&<p className="study-example">{task.item.example}</p>}<div className="rating-grid"><button className="rate-wrong" onClick={()=>rateFlip(false)}>✕ &nbsp; Noch nicht</button><button className="rate-correct" onClick={()=>rateFlip(true)}>✓ &nbsp; Gewusst!</button></div></>:<button className="reveal-button" onClick={()=>setRevealed(true)}>Antwort aufdecken <span aria-hidden="true">↻</span></button>}</div>
- :<div className="answer-area"><p className="muted">{studyMode==='test'?'Prüfungsmodus: ein Versuch, keine Hinweise.':attempt===1?'Schreibe deine Antwort. Du hast zwei Versuche.':'Zweiter Versuch'}</p>
- {stage==='hint'&&<div className="hint">💡 {hint()}</div>}
- {(stage==='ask'||stage==='hint')?<form onSubmit={e=>{e.preventDefault();check()}}><input autoFocus value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Deine Antwort eingeben …" aria-label="Deine Antwort"/><button className="primary" disabled={!answer.trim()}>Antwort prüfen →</button></form>:<><div className={stage==='correct'?'success':'error'}><strong>{stage==='correct'?'🎉 Richtig!':'Noch nicht ganz.'}</strong><p>Lösung: {options.join(' / ')}</p>{showExamples&&task.item.example&&<p className="study-example">{task.item.example}</p>}{stage==='wrong'&&<p>Deine Antwort: {answer}</p>}</div><button className="primary" onClick={next}>Nächste Karte →</button></>}
- </div>}</div></>:<p>Keine Aufgaben in diesem Lernset.</p>}</section>}
  {tab==='settings'&&<section className="compact-settings">
  <div className="settings-heading"><button className="icon-button" onClick={()=>setTab('home')} aria-label="Zurück"><UiIcon kind="back"/></button><h1>Einstellungen</h1></div>
  <div className="setting-group">
