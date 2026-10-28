@@ -1,5 +1,5 @@
 export type Versioned={fieldVersions?:Record<string,string>};
-export type Item=Versioned&{position?:number;id:string;front:string;back:string;kind:'translation'|'qa';alternatives?:string[];source?:string};
+export type Item=Versioned&{position?:number;id:string;front:string;back:string;kind:'translation'|'qa';alternatives?:string[];example?:string;source?:string};
 export type SetData=Versioned&{deletedItemIds?:string[];id:string;subjectId:string;title:string;items:Item[];frontLanguage?:string;backLanguage?:string;createdAt:string;updatedAt:string};
 export type Subject=Versioned&{id:string;name:string;updatedAt?:string};
 export type Attempt={id:string;itemId:string;setId:string;direction:'front-back'|'back-front';correct:boolean;attempts:number;createdAt:string};
@@ -54,7 +54,7 @@ function mergeFields<T extends Versioned>(a:T,b:T,fields:string[],aFallback:stri
  }
  out.fieldVersions=versions;return out;
 }
-const subjectFields=['name'],setFields=['title','subjectId','frontLanguage','backLanguage'],itemFields=['front','back','kind','alternatives','source'];
+const subjectFields=['name'],setFields=['title','subjectId','frontLanguage','backLanguage'],itemFields=['front','back','kind','alternatives','example','source'];
 const epoch='2020-01-01T00:00:00.000Z';
 function withVersions(lib:Library):Library {
  const fill=<T extends Versioned>(v:T,fields:string[],fallback:string):T=>({...v,fieldVersions:Object.fromEntries(fields.map(k=>[k,v.fieldVersions?.[k]||fallback]))});
