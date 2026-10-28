@@ -350,21 +350,25 @@ function App(){
  </div>
  <div className="setting-group">
   <div className="settings-title"><h2>KI-Erkennung</h2><Help text="Für die Fotoanalyse wird dein eigener OpenAI-API-Key verwendet. Wenn du «Auf Gerät behalten» aktivierst, liegt er unverschlüsselt im Browser-Speicher und kann bei Zugriff auf dieses Browserprofil ausgelesen werden. Verwende einen separaten Schlüssel mit Budgetlimit."/></div>
-  <label>OpenAI-API-Key<input type="password" autoComplete="off" spellCheck={false} placeholder="sk-…" value={aiKey} onChange={e=>setAiKey(e.target.value.trim())}/></label>
-  <div className="settings-inline">
-   <label>Modell<select value={aiModel} onChange={e=>setAiModel(e.target.value)}>
+  <label htmlFor="openai-key">OpenAI-API-Key</label>
+  <div className="key-field">
+   <input id="openai-key" type="password" autoComplete="off" spellCheck={false} placeholder="sk-…" value={aiKey} onChange={e=>setAiKey(e.target.value.trim())}/>
+   <button type="button" className="key-delete" aria-label="Gespeicherten API-Key löschen" title="API-Key löschen" disabled={!aiKey} onClick={()=>{setAiKey('');setRememberAiKey(false);sessionStorage.removeItem(API_SESSION);localStorage.removeItem(API_LOCAL)}}><UiIcon kind="trash"/></button>
+  </div>
+  <div className="ai-preferences">
+   <label className="model-choice">Modell<select value={aiModel} onChange={e=>setAiModel(e.target.value)}>
     <option value="gpt-4.1-mini">GPT-4.1 mini</option><option value="gpt-4o-mini">GPT-4o mini</option><option value="gpt-4.1">GPT-4.1</option><option value="gpt-4o">GPT-4o</option>
    </select></label>
-   <label className="key-persistence"><input type="checkbox" checked={rememberAiKey} onChange={e=>setRememberAiKey(e.target.checked)}/><span>Auf Gerät behalten</span></label>
+   <label className="key-persistence"><input type="checkbox" checked={rememberAiKey} onChange={e=>setRememberAiKey(e.target.checked)}/><span>API-Key auf diesem Gerät speichern</span></label>
   </div>
-  <button onClick={()=>{setAiKey('');setRememberAiKey(false);sessionStorage.removeItem(API_SESSION);localStorage.removeItem(API_LOCAL)}}>API-Key löschen</button>
  </div>
  <div className="setting-group">
   <div className="settings-title"><h2>Lernen</h2><Help text="Standardmässig wird von deiner Muttersprache in die zu lernende Sprache abgefragt. Die Richtung lässt sich in jedem Lernset ändern; gemischte Abfrage ist optional."/></div>
   <label>Muttersprache<input value={nativeLanguage} onChange={e=>setNativeLanguage(e.target.value)} placeholder="z. B. Deutsch"/></label>
  </div>
  <details className="settings-secondary"><summary>Erweitert & Backup</summary>
-  <label>Eigener KI-Dienst (optional)<input type="url" autoComplete="off" spellCheck={false} placeholder="https://mein-worker.workers.dev" value={workerOverride} onChange={e=>{const v=e.target.value.trim();setWorkerOverride(v);if(v)localStorage.setItem('ol-ai-worker-override',v);else localStorage.removeItem('ol-ai-worker-override')}}/></label>
+  <label>Eigener KI-Dienst (optional) <Help text="Die Adresse ersetzt ausschliesslich den Dienst für den Fotoimport. Der Server muss POST /api/extract unterstützen, dieselbe Antwortstruktur liefern und Anfragen dieser Website über CORS erlauben. Google-Login und Synchronisation bleiben beim Open-Learning-Anmeldedienst. Ohne eigene URL gilt der Standarddienst."/></label>
+  <div className="worker-url-row"><input type="url" aria-label="Adresse des eigenen KI-Dienstes" autoComplete="off" spellCheck={false} placeholder="https://mein-worker.workers.dev" value={workerOverride} onChange={e=>{const v=e.target.value.trim();setWorkerOverride(v);if(v)localStorage.setItem('ol-ai-worker-override',v);else localStorage.removeItem('ol-ai-worker-override')}}/>{workerOverride&&<button type="button" onClick={()=>{setWorkerOverride('');localStorage.removeItem('ol-ai-worker-override')}}>Standard</button>}</div>
   <div className="action-row"><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>Backup exportieren</button><label className="backup-import">Backup importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label></div>
   <Help text="Backups enthalten deine Fächer, Lernsets und Lernversuche, aber keine Anmeldetokens oder KI-API-Keys. Der Import führt vorhandene Daten zusammen."/>
  </details>
@@ -390,7 +394,7 @@ function ManageDialog({action,library,onCancel,onSave,onDelete}:{action:ManageAc
 function Help({text}:{text:string}){
  return <details className="info-popover"><summary aria-label="Information anzeigen" title="Information"><UiIcon kind="info"/></summary><div className="info-popup" role="note"><p>{text}</p></div></details>
 }
-function UiIcon({kind}:{kind:'home'|'camera'|'settings'|'book'|'chevron'|'back'|'edit'|'info'}){
+function UiIcon({kind}:{kind:'home'|'camera'|'settings'|'book'|'chevron'|'back'|'edit'|'info'|'trash'}){
  const path={
  home:<><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-7h6v7"/></>,
  camera:<><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></>,
@@ -400,6 +404,7 @@ function UiIcon({kind}:{kind:'home'|'camera'|'settings'|'book'|'chevron'|'back'|
  back:<path d="m15 18-6-6 6-6"/>,
  edit:<><path d="M12 20h9"/><path d="M16.5 3.5a2 2 0 0 1 3 3L8 18l-5 1 1-5Z"/></>,
  info:<><circle cx="12" cy="12" r="10"/><path d="M12 11v5"/><path d="M12 7h.01"/></>,
+ trash:<><path d="M4 7h16M10 4h4l1 3H9l1-3ZM7 7l1 14h8l1-14M10 11v7M14 11v7"/></>,
  }[kind];
  return <svg className="ui-icon" aria-hidden="true" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{path}</svg>
 }
