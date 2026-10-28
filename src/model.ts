@@ -2,7 +2,7 @@ export type Versioned={fieldVersions?:Record<string,string>};
 export type Item=Versioned&{position?:number;id:string;front:string;back:string;kind:'translation'|'qa';alternatives?:string[];example?:string;source?:string};
 export type SetData=Versioned&{deletedItemIds?:string[];id:string;subjectId:string;title:string;items:Item[];frontLanguage?:string;backLanguage?:string;createdAt:string;updatedAt:string};
 export type Subject=Versioned&{id:string;name:string;updatedAt?:string};
-export type Attempt={id:string;itemId:string;setId:string;direction:'front-back'|'back-front';correct:boolean;attempts:number;createdAt:string};
+export type Attempt={id:string;itemId:string;setId:string;direction:'front-back'|'back-front';correct:boolean;attempts:number;practiceMode?:string;createdAt:string};
 export type Library={schema:1;subjects:Subject[];sets:SetData[];attempts:Attempt[];deletedSubjectIds?:string[];deletedSetIds?:string[];updatedAt:string};
 export const uid=()=>crypto.randomUUID();
 export const normalize=(s:string)=>s.trim().toLocaleLowerCase().replace(/[’‘]/g,"'").replace(/[.!?]+$/,"").replace(/\s+/g,' ');

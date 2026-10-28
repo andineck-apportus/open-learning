@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {initialLibrary,stampChanges,mergeLibraries} from './model.ts';
-const bundled=await build({entryPoints:[new URL('./replica-cloud.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',write:false});
+const bundled=await build({entryPoints:[decodeURIComponent(new URL('./replica-cloud.ts',import.meta.url).pathname)],bundle:true,platform:'node',format:'esm',write:false});
 const {readReplicas,writeReplica,clearReplicaCache}=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
 const c={provider:'google',token:'test-only'};
 function drive(){
