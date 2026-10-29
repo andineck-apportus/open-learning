@@ -1,5 +1,10 @@
 # Setup and operations
 
+For the current MSAL-based Microsoft integration and app registration, see
+[OneDrive and SharePoint](microsoft-storage.md). The older Microsoft instructions
+below describe the previous personal-account-only implementation.
+
+
 ## Persistent Google login
 
 The hosted app uses the Worker authorization-code flow described in [Google OAuth](google-oauth.md). The browser-token instructions below describe the earlier implementation and are retained only for historical context.

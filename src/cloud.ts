@@ -1,5 +1,5 @@
 import{Library,validLibrary}from './model';import type{Provider}from './oauth';
-export type Connection={provider:Provider;token:string;remoteId?:string;etag?:string};
+export type Connection={provider:Provider;token:string;remoteId?:string;etag?:string;accountId?:string;siteId?:string;clientId?:string};
 export class ConflictError extends Error{constructor(){super('Cloud-Datei wurde auf einem anderen Gerät geändert. Bitte erneut synchronisieren.')}}
 async function request(url:string,token:string,init:RequestInit={}){const res=await fetch(url,{...init,headers:{Authorization:'Bearer '+token,...init.headers}});if(res.status===412||res.status===409)throw new ConflictError();if(!res.ok&&res.status!==404)throw Error('Cloud '+res.status+': '+(await res.text()).slice(0,250));return res}
 const google='https://www.googleapis.com/drive/v3/files';

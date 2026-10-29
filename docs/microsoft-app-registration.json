@@ -1,0 +1,26 @@
+{
+  "displayName": "Open Learning",
+  "signInAudience": "AzureADandPersonalMicrosoftAccount",
+  "spa": {
+    "redirectUris": [
+      "https://andineck-apportus.github.io/open-learning/",
+      "http://localhost:5173/",
+      "http://127.0.0.1:5173/"
+    ]
+  },
+  "requiredResourceAccess": [
+    {
+      "resourceAppId": "00000003-0000-0000-c000-000000000000",
+      "resourceAccess": [
+        {
+          "id": "8019c312-3263-48e6-825e-2b833497195b",
+          "type": "Scope"
+        },
+        {
+          "id": "205e70e5-aba6-4c52-a976-6d2d46c48043",
+          "type": "Scope"
+        }
+      ]
+    }
+  ]
+}

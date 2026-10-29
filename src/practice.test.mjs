@@ -29,3 +29,17 @@ test('overview and learning view use the same native-language direction',()=>{
  assert.equal(preferredDirection(['Deutsch','Englisch'],'Deutsch'),'front-back');
  assert.equal(preferredDirection(['Frage','Antwort'],'Deutsch'),'front-back');
 });
+test('Memory never promotes or resets a knowledge level',()=>{
+ const a={id:'a',itemId:'i',setId:'s',direction:'front-back',correct:true,attempts:1,createdAt:'2026-10-29T10:00:00Z',practiceMode:'write'};
+ const memory={...a,id:'m',practiceMode:'memory',correct:false,attempts:2,createdAt:'2026-10-29T11:00:00Z'};
+ assert.equal(progressFor([a,memory],'s','i','front-back').level,1);
+ assert.equal(progressFor([{...memory,correct:true,attempts:1}],'s','i','front-back').level,0);
+});
+test('dictation speaks the foreign language regardless of which side contains the native language',async()=>{
+ const {listeningDirection}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+ assert.equal(listeningDirection(['Französisch','Deutsch'],'Deutsch'),'front-back');
+ assert.equal(listeningDirection(['Deutsch','Französisch'],'Deutsch'),'back-front');
+ assert.equal(listeningDirection(['Deutsch (Schweiz)','Englisch'],'Deutsch'),'back-front');
+ assert.equal(listeningDirection(['Englisch','Italienisch'],'English'),'back-front');
+ assert.equal(listeningDirection(['Französisch','Deutsch'],'Französisch'),'back-front');
+});

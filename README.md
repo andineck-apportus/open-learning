@@ -44,21 +44,39 @@ A small optional Cloudflare Worker (`worker/src/index.js`) accepts a per-session
 
 Lernsets bieten drei Einstiege: Lernen (Karten, Schreiben, Prüfung), Üben
 (Hören und Schreiben, Auswahl, Wort bauen) und Spielen (Wahr oder falsch,
-Zuordnen, Memory). Beispielsätze bleiben an der Vokabel und können nach dem
-Aufdecken eingeblendet werden.
+Zuordnen, Memory). Vorhandene Beispielsätze lassen sich schon vor dem Aufdecken
+über „Beispielsätze anzeigen“ ein- und ausblenden. Sie sind standardmässig sichtbar.
+Das mitgelieferte Beispielset enthält 28 redaktionell ergänzte Beispielsätze mit
+deutscher Bedeutung, auch in älteren lokalen Beständen. Eigene Sätze und bewusst
+gelöschte Beispiele bleiben erhalten; veränderte oder importierte Karten bekommen
+keine automatisch erfundenen Sätze. Fortgesetzte Runden lesen Beispiele aus der
+aktuellen Karte. Fehlen Beispiele, zeigt die Lernansicht einen Hinweis auf „Bearbeiten“. Die Option bleibt pro Browser erhalten;
+in Prüfungen sind Beispielsätze erst in der Auswertung erreichbar.
 
 Unter „Lernen anpassen“ stehen Mischen, fällige Karten und ein Drill mit fünf
 Karten bereit. Fehler werden im Drill bis zu zweimal mit anderen Karten
 dazwischen wiederholt; nach fünf Sekunden wird eine Lösungshilfe sichtbar.
 Fünf Lernstufen planen Wiederholungen nach 1, 3, 7, 14 und 30 Tagen. Fehler
 setzen die Stufe zurück. Die Richtungen werden getrennt ausgewertet.
-Hörübungen erhöhen den Übersetzungsstand nicht.
+„Hören & schreiben“ verwendet unabhängig von der Übersetzungsrichtung die
+Fremdsprache als Hör- und Eingabesprache. Die Bedeutung in der Muttersprache
+erscheint nach einer richtigen Eingabe; Beispielsätze bleiben vorher verborgen.
+Nach einem Fehler lässt sich die Lösung über „Richtig schreiben“ nochmals
+abschreiben, auch im Modus Schreiben. Diese Wiederholung verändert die
+ursprüngliche Bewertung nicht. Eingabe und Zustand der Wiederholung bleiben
+beim Pausieren erhalten. Hörübungen erhöhen den Übersetzungsstand nicht. Memory zählt ausschliesslich als
+Spiel: Fehlversuche und gefundene Paare verändern den Wissensstand nicht; auch
+die Rundenanzeige verwendet keine Wissenskategorien.
 
 Eine unterbrochene Runde lässt sich auf demselben Browser fortsetzen. Der
-Zwischenstand wird lokal gespeichert; bewertete Versuche verwenden die
-vorhandene Synchronisation. Aktuell wird eine Runde gleichzeitig behalten.
-Sprachausgabe nutzt die Stimmen des Browsers. Eine Prüfung gibt erst nach
-der letzten Aufgabe eine Gesamtauswertung und übernimmt dann die Versuche.
+Zwischenstand wird pro Lernset lokal gespeichert, inklusive Texteingabe,
+Bewertungszustand und Memory-Spielbrett. Pro Set bleibt eine angefangene Runde
+erhalten. „Speichern & Pause“ kehrt zur Auswahl zurück; „Fortsetzen“ lädt den
+Stand auch nach einem Neuladen. Das Fortsetzen ist an diesen Browser gebunden.
+Bewertete Antworten werden sofort gespeichert, auch in Prüfungen; sie verwenden
+die vorhandene Synchronisation. Die Übernahme beim Fortsetzen ist nach
+Versuchs-ID gegen Doppelzählung geschützt. Sprachausgabe nutzt die Stimmen
+des Browsers. Prüfungen zeigen erst nach der letzten Aufgabe die Gesamtauswertung.
 
 Prüfen: `npm run build` und `node --experimental-strip-types --test src/*.test.mjs`.
 
@@ -75,8 +93,54 @@ geprüft; ein zusätzlicher Test auf echten iOS-/Android-Geräten ist empfohlen.
 Der Lernstand erscheint als farbiger, proportionaler Balken in der Setübersicht
 und im Lernset. Jede Karte zählt genau einmal in der gewählten Abfragerichtung;
 Sachfragen verwenden immer Frage → Antwort. Die Farben zeigen „Noch üben“,
-Stufen 1–4 und „Sicher“ (Stufe 5). Zahlen und Beschriftungen ergänzen die Farben.
+„Wird sicherer“ (Schritte 1–4 zusammengefasst) und „Sicher“ (Schritt 5). Zahlen
+und Beschriftungen ergänzen die Farben. Eine aufklappbare Erklärung beschreibt
+die fünf richtigen Antworten in Folge, Rücksetzungen und Wiederholungstage.
 Während einer Runde füllt jede Bewertung sofort ein Segment (grün: gewusst,
 orange: nochmals üben). Prüfungen zeigen bis zum Abschluss nur den neutralen
 Bearbeitungsstand. Die Rundenauswertung zeigt den Anteil richtiger Antworten
 als Kreisdiagramm und den aktuellen Lernstand als Balken.
+
+Tastatursprache und Tastenanordnung lassen sich unter „anpassen“ oberhalb der
+Tasten unabhängig wählen. Die Einstellungen bleiben beim Schreiben eingeklappt.
+Auf schmalen Bildschirmen und bei Touchbedienung nutzt die Schreibansicht mit
+eigener Tastatur die gesamte verfügbare Höhe. Die Aufgabe kann separat scrollen;
+Antwortfeld, Tasten und Prüfen bleiben sichtbar. Auch im Querformat reicht die Tastatur über die gesamte Breite;
+bei wenig Höhe stehen Antwortfeld und Prüfen nebeneinander. Im Browser geprüft: 320×568, 390×667,
+390×844, 1024×768 und 844×390. „Automatisch“ folgt der Antwortsprache; „Standard“ verwendet
+für Französisch und Deutsch QWERTZ, für Englisch, Italienisch und Spanisch QWERTY.
+Die Auswahl wird pro Browser unter `ol-keyboard-preferences-v1` behalten und
+ändert weder die Abfragerichtung noch vorhandene Antworten.
+
+Die eigene Tastatur wird nicht allein über die Breite aktiviert: Touch-Punkte,
+primäre/weitere grobe Zeiger, User-Agent und gegebenenfalls mobile Client-Hints
+werden zusätzlich berücksichtigt. Damit verwenden auch breite Tablets und iPads
+mit Mac-artigem Desktop-User-Agent weiterhin das schreibgeschützte Antwortfeld
+mit `inputMode="none"`. Auf einem Desktop ohne Touch ist die Bildschirmtastatur
+optional einblendbar. Die Erkennung und das gerenderte Eingabefeld sind für
+simulierte iPad-/Android-Signale automatisiert geprüft; echte Hardware bleibt
+ein zusätzlicher Abnahmeschritt.
+
+Referenzen: [MDN maxTouchPoints](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/maxTouchPoints),
+[MDN User-Agent](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/userAgent),
+[MDN inputmode](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/inputmode).
+
+Aktuelle Anbindung und ausstehende Freigabe: [OneDrive / SharePoint](docs/microsoft-storage.md).
+Nächster KI-Ausbauschritt: [Zentrale und eigene Schlüssel](docs/ai-security-plan.md).
+
+Die laufende Lernansicht zeigt nur Pause, Modus, Kartennummer, einen schmalen
+Fortschrittsbalken und die Aufgabe mit optionalem Beispielsatz. Set-Titel,
+Navigation, Stufen und Fortschrittslegenden sind während der Runde ausgeblendet.
+In Schreiben, Diktat und Prüfung bleibt derselbe Eingabe- und Tastaturbereich
+beim Tippen, bei Rückmeldung und beim Wechsel zur nächsten Karte erhalten.
+„Antwort prüfen“ wechselt an derselben Position zu „Weiter“; die Tasten bleiben
+sichtbar und sind nach der Bewertung gesperrt. Der Aufgabenbereich scrollt bei
+Bedarf separat. Desktop-Fokus wird ohne Scrollen zurückgesetzt. Bewegungen und
+Farbübergänge der Lernbedienung sind deaktiviert. Im Browser wurden identische
+Positionen und unveränderte Eingabe-/Tastatur-DOM-Knoten über Bewertung,
+Kartenwechsel und Nachschreiben verifiziert. Breitenprüfung: 320×568, 360×640,
+390×667, 430×932 und 568×320; die eigene Tastatur reicht jeweils von Rand zu Rand.
+
+Auch bei 120 % Browserzoom (266×473 nutzbare CSS-Pixel) bleiben Tastatur und
+Prüfen sichtbar. Bei sehr wenig Höhe werden die Tasten kompakter; beim
+Nachschreiben steht die richtige Lösung direkt als Aufgabe oben.

@@ -1,0 +1,1 @@
+export class CloudError extends Error {status:number;constructor(status:number){super(status===401?'Cloud-Anmeldung erneuern':status===403?'Cloud verweigert den Zugriff':'Cloud nicht erreichbar ('+status+')');this.status=status}}
