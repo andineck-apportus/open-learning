@@ -19,3 +19,16 @@ test('round summary displays actual accuracy and handles empty rounds',()=>{
 test('an empty learning set has a neutral graphic and readable stage labels',()=>{
  const html=levels({levels:[]});assert.ok(!html.includes('NaN'));assert.ok(!html.includes('Infinity'));assert.match(html,/Noch üben/);assert.match(html,/Sicher/);
 });
+test('Memory shows only game completion, including its summary',()=>{
+ for(const summary of [false,true]){
+  const html=round({total:4,results:[{correct:false},{correct:true}],neutral:true,summary});
+  assert.ok(!html.includes('Gewusst'));assert.ok(!html.includes('Noch üben'));assert.ok(!html.includes('Offen'));assert.ok(!html.includes('Prozent richtig'));
+  assert.match(html,/zugeordnet/);
+ }
+});
+test('the learning overview combines intermediate steps into one clear category',()=>{
+ const html=levels({levels:[0,1,2,3,4,5]});
+ assert.equal((html.match(/level-legend-item/g)||[]).length,3);
+ assert.match(html,/Wird sicherer<\/span><strong>4/);
+ assert.ok(!html.includes('Stufe 1'));
+});

@@ -6,6 +6,38 @@ export type Attempt={id:string;itemId:string;setId:string;direction:'front-back'
 export type Library={schema:1;subjects:Subject[];sets:SetData[];attempts:Attempt[];deletedSubjectIds?:string[];deletedSetIds?:string[];updatedAt:string};
 export const uid=()=>crypto.randomUUID();
 export const normalize=(s:string)=>s.trim().toLocaleLowerCase().replace(/[’‘]/g,"'").replace(/[.!?]+$/,"").replace(/\s+/g,' ');
+// Authored learning aids for the built-in sample set, not transcriptions from a photo.
+const starterExamples=[
+ 'Paul est mon meilleur ami.\nPaul ist mein bester Freund.',
+ 'Ton idée est géniale !\nDeine Idee ist genial!',
+ 'Ce film est drôle.\nDieser Film ist lustig.',
+ 'Le quartier est tranquille.\nDas Quartier ist ruhig.',
+ 'Nous avons des goûts différents.\nWir haben unterschiedliche Vorlieben.',
+ 'Quelle est la différence ?\nWas ist der Unterschied?',
+ 'Ton amitié est importante pour moi.\nDeine Freundschaft ist mir wichtig.',
+ 'Je parle français avec mon voisin.\nIch spreche Französisch mit meinem Nachbarn.',
+ 'J’aime passer du temps avec mes amis.\nIch verbringe gern Zeit mit meinen Freunden.',
+ 'Nous avons le même âge.\nWir sind gleich alt.',
+ 'Nous parlons beaucoup ensemble.\nWir sprechen viel miteinander.',
+ 'J’aime son humour.\nIch mag seinen Humor.',
+ 'On rigole souvent ensemble.\nWir lachen oft zusammen.',
+ 'Nous aimons passer notre temps libre ensemble.\nWir verbringen unsere Freizeit gern zusammen.',
+ 'Même en vacances, elle garde toujours contact avec moi.\nAuch in den Ferien bleibt sie immer in Kontakt mit mir.',
+ 'Le soir, nous nous envoyons des clips.\nAm Abend senden wir uns Clips zu.',
+ 'Mon ami est drôle : il me fait rire.\nMein Freund ist lustig: Er bringt mich zum Lachen.',
+ 'Ma voisine a treize ans.\nMeine Nachbarin ist dreizehn Jahre alt.',
+ 'Ma voisine est très sympa.\nMeine Nachbarin ist sehr nett.',
+ 'Je rencontre un ami après l’école.\nIch treffe nach der Schule einen Freund.',
+ 'Je la connais depuis longtemps.\nIch kenne sie schon lange.',
+ 'Nous sommes amis depuis cinq ans.\nWir sind seit fünf Jahren befreundet.',
+ 'Nous avons beaucoup de points communs.\nWir haben viele Gemeinsamkeiten.',
+ 'Mon meilleur ami est toujours là pour moi.\nMein bester Freund ist immer für mich da.',
+ 'Je peux tout lui raconter, même mes soucis.\nIch kann ihm alles erzählen, auch meine Sorgen.',
+ 'Je peux lui faire confiance : il garde mes secrets.\nIch kann ihm vertrauen: Er behält meine Geheimnisse für sich.',
+ 'Il m’aide souvent avec mes devoirs.\nEr hilft mir oft bei meinen Hausaufgaben.',
+ 'Je lis tandis que Paul joue. J’ai presque fini.\nIch lese, während Paul spielt. Ich bin fast fertig.'
+];
+
 export const starterPairs:[string,string][]=[
 ['le meilleur ami / la meilleure amie','der beste Freund / die beste Freundin'],
 ['génial/e','genial'],['drôle, amusant/e','lustig, witzig, amüsant'],
@@ -22,7 +54,7 @@ export const starterPairs:[string,string][]=[
 ['être là pour qn','für jmdn. da sein'],['Je peux tout lui raconter.','Ich kann ihm/ihr alles erzählen.'],
 ['Je peux lui faire confiance.','Ich kann ihm/ihr vertrauen.'],["Il m'aide souvent.",'Er hilft mir oft.'],
 ['tandis que / presque','wohingegen (während) / fast']];
-export function initialLibrary():Library{const now='2020-01-01T00:00:00.000Z';return{schema:1,subjects:[{id:'french',name:'Französisch'}],sets:[{id:'unite2',subjectId:'french',title:'Unité 2 – Lernziel 1',frontLanguage:'Französisch',backLanguage:'Deutsch',createdAt:now,updatedAt:now,items:starterPairs.map(([front,back],i)=>({id:'u2-'+(i+1),front,back,kind:'translation'}))}],attempts:[],updatedAt:now}}
+export function initialLibrary():Library{const now='2020-01-01T00:00:00.000Z';return{schema:1,subjects:[{id:'french',name:'Französisch'}],sets:[{id:'unite2',subjectId:'french',title:'Unité 2 – Lernziel 1',frontLanguage:'Französisch',backLanguage:'Deutsch',createdAt:now,updatedAt:now,items:starterPairs.map(([front,back],i)=>({id:'u2-'+(i+1),front,back,kind:'translation',example:starterExamples[i]}))}],attempts:[],updatedAt:now}}
 export function validLibrary(x:unknown):x is Library {
  if(!x||typeof x!=='object')return false;
  const v=x as Library,ids=(a:unknown)=>a===undefined||Array.isArray(a)&&a.every(x=>typeof x==='string');
@@ -98,3 +130,11 @@ export function setLanguageLabels(set:SetData,subjectName:string):[string,string
   return [set.frontLanguage?.trim()||inherited[0],set.backLanguage?.trim()||inherited[1]];
 }
 
+
+/** Old installations get the same sample examples; edited/imported cards are never guessed. */
+export function exampleForItem(setId:string,item:Item):string|undefined{
+ if(item.example!==undefined)return item.example;
+ if(setId!=='unite2')return undefined;
+ const index=starterPairs.findIndex(([front,back],i)=>item.id===`u2-${i+1}`&&item.front===front&&item.back===back);
+ return index<0?undefined:starterExamples[index];
+}

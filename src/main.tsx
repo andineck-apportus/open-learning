@@ -1,14 +1,16 @@
+import {takeLegacyAiKey,extractionEndpoint} from './ai-key';
+import {SyncBadge} from './SyncBadge';
+import {beginMicrosoftLogin,finishMicrosoftLogin,disconnectMicrosoft,microsoftClientId,saveMicrosoftClientId} from './microsoft-session';
 import {LearningProgress} from './LearningProgress';
 import {learningLevels,preferredDirection} from './learning-engine';
 import {Practice} from './Practice';
 import React,{useEffect,useMemo,useState,useRef} from 'react';import{createRoot}from'react-dom/client';import './style.css';
-import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries,deleteLibraryEntity,setLanguageLabels}from './model';
-import {useAutoSync} from './use-auto-sync';import{startLogin,finishLogin,type Provider,type OAuthConfig}from './oauth';import{type Connection}from './cloud';
+import{type Library,type SetData,type Item,type Attempt,uid,normalize,possibleAnswers,mergeLibraries,deleteLibraryEntity,setLanguageLabels,exampleForItem}from './model';
+import {useAutoSync} from './use-auto-sync';import{type Connection}from './cloud';
 import { recognizeImage, pairCandidates } from './ocr';
 import {beginGoogleLogin,finishGoogleLogin,hasGoogleSession,disconnectGoogle} from './google-session';
 type ManageAction={kind:'subject'|'set';mode:'create'|'rename'|'delete';id?:string;name:string};
 type Task={item:Item;setId:string;direction:'front-back'|'back-front'};
-const config:OAuthConfig={googleClientId:import.meta.env.VITE_GOOGLE_CLIENT_ID||'',microsoftClientId:import.meta.env.VITE_MICROSOFT_CLIENT_ID||''};
 const GSESSION='ol-google-session',API_SESSION='ol-api-session',API_LOCAL='ol-api-remembered',API_REMEMBER='ol-api-persist',LAST_PROVIDER='ol-last-cloud-provider';
 const download=(filename:string,data:string)=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.href=u;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 function App(){
@@ -16,6 +18,7 @@ function App(){
  const [selected,setSelected]=useState('unite2'),[selectedSubject,setSelectedSubject]=useState('french');
  const [connection,setConnection]=useState<Connection|null>(null);
  const {lib,modify,sync,pause:pauseSync,status:syncStatus,syncing,syncError}=useAutoSync(connection);
+ const [msClientId,setMsClientId]=useState(microsoftClientId),[sharePointUrl,setSharePointUrl]=useState('');
  const [cloudState,setCloudState]=useState(()=>hasGoogleSession()?'Google Drive wird verbunden …':'Nicht verbunden');
  const [manage,setManage]=useState<ManageAction|null>(null);
  const [direction,setDirection]=useState<'mixed'|'front-back'|'back-front'>('back-front');
@@ -35,26 +38,21 @@ function App(){
  const configuredWorker=import.meta.env.VITE_AI_WORKER_URL||'https://open-learning-ai.andineck.workers.dev';
  const [workerOverride,setWorkerOverride]=useState(()=>localStorage.getItem('ol-ai-worker-override')||'');
  const workerUrl=workerOverride||configuredWorker;
- const [rememberAiKey,setRememberAiKey]=useState(()=>localStorage.getItem(API_REMEMBER)==='yes');
- const [aiKey,setAiKey]=useState(()=>localStorage.getItem(API_LOCAL)||sessionStorage.getItem(API_SESSION)||''),[aiModel,setAiModel]=useState('gpt-4.1-mini');
+
+ const [aiKey,setAiKey]=useState(takeLegacyAiKey),[aiModel,setAiModel]=useState('gpt-4.1-mini');
  const [aiMode,setAiMode]=useState<'auto'|'translation'|'qa'>('auto');
 
- useEffect(()=>{
-  if(rememberAiKey){if(aiKey)localStorage.setItem(API_LOCAL,aiKey);else localStorage.removeItem(API_LOCAL);sessionStorage.removeItem(API_SESSION);}
-  else{localStorage.removeItem(API_LOCAL);if(aiKey)sessionStorage.setItem(API_SESSION,aiKey);else sessionStorage.removeItem(API_SESSION);}
- },[aiKey,rememberAiKey]);
- useEffect(()=>{localStorage.setItem(API_REMEMBER,rememberAiKey?'yes':'no')},[rememberAiKey]);
-
- useEffect(()=>{finishLogin(config).then(c=>{if(c){setConnection({provider:c.provider,token:c.accessToken});localStorage.setItem(LAST_PROVIDER,c.provider);setCloudState(c.provider==='google'?'Google Drive verbunden':'OneDrive verbunden');setTab('settings')}}).catch(e=>setError('Anmeldung: '+e.message))},[]);
+ useEffect(()=>{localStorage.removeItem(API_LOCAL);sessionStorage.removeItem(API_SESSION);localStorage.removeItem(API_REMEMBER)},[]);
  useEffect(()=>{
   let active=true;
   (async()=>{
    const completed=await finishGoogleLogin();
    if(completed&&active)setTab('settings');
+   if(localStorage.getItem(LAST_PROVIDER)==='microsoft'){const microsoft=await finishMicrosoftLogin();if(microsoft&&active){setConnection(microsoft);setCloudState(microsoft.siteId?'SharePoint verbunden':'OneDrive verbunden');setTab('settings')}return;}
    if(hasGoogleSession()){
     if(active){setConnection({provider:'google',token:''});setCloudState('Google Drive dauerhaft verbunden');}
    }
-  })().catch(e=>{if(active){setCloudState(hasGoogleSession()?'Google Drive vorübergehend nicht erreichbar – Seite neu laden':'Google Drive: Bitte erneut verbinden');setError(e.message)}});
+  })().catch(e=>{if(active){setCloudState('Cloud: Bitte erneut verbinden');setError(e.message)}});
   return()=>{active=false};
  },[]);
  async function authorizeGoogle(){
@@ -63,8 +61,12 @@ function App(){
  }
  async function disconnectCloud(){
   setBusy(true);setError('');
-  try{await pauseSync();if(connection?.provider==='google'||hasGoogleSession())await disconnectGoogle();sessionStorage.removeItem(GSESSION);localStorage.removeItem(LAST_PROVIDER);setConnection(null);setCloudState('Nicht verbunden')}
+  try{await pauseSync();if(connection?.provider==='microsoft')await disconnectMicrosoft();else if(hasGoogleSession())await disconnectGoogle();sessionStorage.removeItem(GSESSION);localStorage.removeItem(LAST_PROVIDER);setConnection(null);setCloudState('Nicht verbunden')}
   catch(e){setError('Trennen fehlgeschlagen: '+String(e));setConnection(null)}finally{setBusy(false)}
+ }
+ async function authorizeMicrosoft(site=''){
+  setBusy(true);setError('');
+  try{saveMicrosoftClientId(msClientId.trim());await pauseSync();await beginMicrosoftLogin(site)}catch(e){setError(e instanceof Error?e.message:'Microsoft-Anmeldung fehlgeschlagen');setConnection(c=>c?{...c}:null);setBusy(false)}
  }
  const sets=lib?.sets||[],currentSet=sets.find(s=>s.id===selected)||sets[0],subject=lib?.subjects.find(s=>s.id===currentSet?.subjectId);
  const activeSubject=lib?.subjects.find(x=>x.id===selectedSubject)||subject||lib?.subjects[0];
@@ -132,7 +134,7 @@ function App(){
    const ctx=canvas.getContext('2d');if(!ctx)throw Error('Bildverarbeitung nicht verfügbar');
    ctx.drawImage(img,0,0,canvas.width,canvas.height);img.close();
    const dataUrl=canvas.toDataURL('image/jpeg',0.82);
-   const reply=await fetch(workerUrl.replace(/\/+$/,'')+'/api/extract',{method:'POST',headers:{'Content-Type':'application/json','X-OpenAI-Key':aiKey},body:JSON.stringify({image:dataUrl,subject:'Bitte Fach aus dem Foto automatisch erkennen',mode:'auto',model:aiModel})});
+   const reply=await fetch(extractionEndpoint(workerUrl),{method:'POST',headers:{'Content-Type':'application/json','X-OpenAI-Key':aiKey},body:JSON.stringify({image:dataUrl,subject:'Bitte Fach aus dem Foto automatisch erkennen',mode:'auto',model:aiModel})});
    const response=await reply.json().catch(()=>({error:'Keine gültige Antwort des KI-Dienstes'}));
    if(!reply.ok)throw Error(response.error||('HTTP '+reply.status));
    if(!Array.isArray(response.items))throw Error('Ungültige KI-Antwort');
@@ -198,7 +200,8 @@ function App(){
   <button type="button" className="brand-home" onClick={()=>setTab('home')} aria-label="Zur Fächerübersicht">
    <span className="brand-mark" aria-hidden="true">✦</span><strong className="brand">open learning<span className="brand-dot">.</span></strong>
   </button>
-  <div className="header-tools"><span className="sync-compact" role="status" title={syncError||syncStatus}><span className={syncing?'sync-indicator syncing':'sync-indicator'}/>{syncError?'Sync-Fehler':syncing?'Sync läuft':connection?'Synchronisiert':'Lokal'}</span>
+  <div className="header-tools"><SyncBadge status={syncStatus} connected={!!connection} syncing={syncing} error={syncError}/>
+
   <button className={'header-settings '+(tab==='settings'?'active':'')} aria-label="Einstellungen" title="Einstellungen" onClick={()=>setTab(tab==='settings'?'home':'settings')}><UiIcon kind="settings"/></button></div>
  </header>
   {error&&<div role="alert" className="error"><span>{error}</span><button onClick={()=>setError('')}>Schliessen</button></div>}{notice&&<p className="muted" role="status">{notice}</p>}
@@ -235,7 +238,7 @@ function App(){
   <section className="focus-panel set-detail">
    <div className="flat-toolbar set-title-row"><div><h1>{currentSet.title}</h1><p className="muted">{currentSet.items.length} Karten</p></div>
     <button className="subtle-button" onClick={()=>setTab('edit')}><UiIcon kind="edit"/> Bearbeiten</button></div>
-   <Practice key={currentSet.id} set={currentSet} labels={[frontLabel,backLabel]} attempts={lib?.attempts||[]} nativeLanguage={nativeLanguage} onRecord={records=>modify(d=>({...d,attempts:[...d.attempts,...records]}))}/>
+   <Practice key={currentSet.id} set={currentSet} labels={[frontLabel,backLabel]} attempts={lib?.attempts||[]} nativeLanguage={nativeLanguage} onRecord={records=>modify(d=>({...d,attempts:[...d.attempts,...records.filter(r=>!d.attempts.some(a=>a.id===r.id))]}))}/>
    {!currentSet.items.length&&<p className="muted">Noch keine Karten vorhanden.</p>}
   </section>
  </div>}
@@ -250,7 +253,7 @@ function App(){
   <h3>Karten ({currentSet.items.length})</h3>
   {currentSet.items.map((item,i)=><div className="compact-edit-card" key={item.id}>
    <span className="review-number">{i+1}</span><div className="edit-fields"><input aria-label="Vorderseite" value={item.front} onChange={e=>updateSet(set=>({...set,items:set.items.map(x=>x.id===item.id?{...x,front:e.target.value}:x)}))}/><input aria-label="Rückseite" value={item.back} onChange={e=>updateSet(set=>({...set,items:set.items.map(x=>x.id===item.id?{...x,back:e.target.value}:x)}))}/>
-    <input className="example-input" aria-label="Beispielsatz (optional)" placeholder="Beispielsatz (optional)" value={item.example||''} onChange={e=>updateSet(set=>({...set,items:set.items.map(x=>x.id===item.id?{...x,example:e.target.value}:x)}))}/></div>
+    <input className="example-input" aria-label="Beispielsatz (optional)" placeholder="Beispielsatz (optional)" value={exampleForItem(currentSet.id,item)||''} onChange={e=>updateSet(set=>({...set,items:set.items.map(x=>x.id===item.id?{...x,example:e.target.value}:x)}))}/></div>
    <button className="remove-card" aria-label="Karte löschen" onClick={()=>{if(confirm('Karte löschen?'))updateSet(set=>({...set,deletedItemIds:[...(set.deletedItemIds||[]),item.id],items:set.items.filter(x=>x.id!==item.id)}))}}>×</button>
   </div>)}
   <div className="action-row"><button className="primary" onClick={()=>openSet(currentSet.id)}>Fertig</button></div>
@@ -294,7 +297,7 @@ function App(){
   </div>
   {draft.some(x=>x.kind==='translation')&&<div className="language-review"><span className="eyebrow">SPRACHEN ERKANNT</span><div className="language-pair-fields"><label>Vorderseite<input value={draftFrontLanguage} onChange={e=>setDraftFrontLanguage(e.target.value)} placeholder="z. B. Französisch"/></label><label>Rückseite<input value={draftBackLanguage} onChange={e=>setDraftBackLanguage(e.target.value)} placeholder="z. B. Deutsch"/></label></div><p className="language-example">{draftFrontLanguage||'Sprache 1'} ↔ {draftBackLanguage||'Sprache 2'}</p></div>}
   <div className="section-heading"><h2>Karten kontrollieren</h2><span className="muted">Jede Karte kann bearbeitet oder entfernt werden.</span></div>
-  <div className="review-cards">{draft.map((item,i)=><div className="review-card" key={item.id}><span className="review-number">{i+1}</span><label>Vorderseite<input aria-label={'Vorderseite '+(i+1)} value={item.front} onChange={e=>setDraft(d=>d.map(x=>x.id===item.id?{...x,front:e.target.value}:x))}/></label><label>Rückseite<input aria-label={'Rückseite '+(i+1)} value={item.back} onChange={e=>setDraft(d=>d.map(x=>x.id===item.id?{...x,back:e.target.value}:x))}/></label><input className="review-example" aria-label={'Beispielsatz '+(i+1)} placeholder="Beispielsatz (optional)" value={item.example||''} onChange={e=>setDraft(d=>d.map(x=>x.id===item.id?{...x,example:e.target.value}:x))}/><button className="remove-card" aria-label={'Karte '+(i+1)+' entfernen'} onClick={()=>setDraft(d=>d.filter(x=>x.id!==item.id))}>×</button></div>)}</div>
+  <div className="review-cards">{draft.map((item,i)=><div className="review-card" key={item.id}><span className="review-number">{i+1}</span><label>Vorderseite<input aria-label={'Vorderseite '+(i+1)} value={item.front} onChange={e=>setDraft(d=>d.map(x=>x.id===item.id?{...x,front:e.target.value}:x))}/></label><label>Rückseite<input aria-label={'Rückseite '+(i+1)} value={item.back} onChange={e=>setDraft(d=>d.map(x=>x.id===item.id?{...x,back:e.target.value}:x))}/></label><input className="review-example" aria-label={'Beispielsatz '+(i+1)} placeholder="Beispielsatz (optional)" value={exampleForItem(currentSet.id,item)||''} onChange={e=>setDraft(d=>d.map(x=>x.id===item.id?{...x,example:e.target.value}:x))}/><button className="remove-card" aria-label={'Karte '+(i+1)+' entfernen'} onClick={()=>setDraft(d=>d.filter(x=>x.id!==item.id))}>×</button></div>)}</div>
   <div className="review-footer"><button onClick={()=>setDraft(d=>[...d,{id:uid(),front:'',back:'',kind:d.some(x=>x.kind==='translation')?'translation':'qa'}])}>+ Karte ergänzen</button><button className="primary" disabled={!draft.some(x=>x.front.trim()&&x.back.trim())} onClick={approveDraft}>✓ Geprüfte Karten speichern</button></div>
  </div>}
  </section>}
@@ -302,26 +305,29 @@ function App(){
  {tab==='settings'&&<section className="compact-settings">
  <div className="settings-heading"><button className="icon-button" onClick={()=>setTab('home')} aria-label="Zurück"><UiIcon kind="back"/></button><h1>Einstellungen</h1></div>
  <div className="setting-group">
-  <div className="settings-title"><h2>Google Drive</h2><Help text="Die App speichert Lernkarten und Fortschritt in deinem Google Drive und synchronisiert automatisch. Auf diesem Gerät bleibt eine widerrufbare Sitzung bestehen; nach einer Abmeldung musst du dich wieder anmelden."/></div>
-  <p className="setting-status">{connection?.provider==='google'?'Verbunden':cloudState} · {syncStatus}</p>
-  <div className="action-row">
-   <button className={connection?'':'primary'} disabled={busy} onClick={()=>void authorizeGoogle()}>{connection?.provider==='google'?'Erneut verbinden':'Google verbinden'}</button>
-   {connection&&<><button disabled={syncing} onClick={()=>void sync()}>{syncing?'Synchronisiere …':'Jetzt synchronisieren'}</button><button onClick={disconnectCloud}>Trennen</button></>}
+  <div className="settings-title"><h2>Speicher & Synchronisierung</h2><Help text="Lernkarten und Fortschritt werden zuerst lokal gespeichert und mit dem verbundenen Speicher automatisch abgeglichen. Microsoft verwendet einen eigenen App-Ordner und getrennte Datenstände pro Konto."/></div>
+  <p className="setting-status">{connection?.provider==='google'?'Google Drive verbunden':connection?.provider==='microsoft'?(connection.siteId?'SharePoint verbunden':'OneDrive verbunden'):cloudState}</p>
+  <div className="cloud-provider-grid">
+   <div className="cloud-provider"><strong>Google Drive</strong><button disabled={busy} onClick={()=>void authorizeGoogle()}>{connection?.provider==='google'?'Erneut verbinden':'Verbinden'}</button></div>
+   <div className="cloud-provider"><strong>OneDrive</strong><small>Privat, Arbeit oder Schule</small><button disabled={busy||!msClientId.trim()} onClick={()=>void authorizeMicrosoft()}>{connection?.provider==='microsoft'&&!connection.siteId?'Erneut verbinden':'Verbinden'}</button></div>
+   <div className="cloud-provider"><strong>SharePoint</strong><label>Website-Adresse<input type="url" value={sharePointUrl} onChange={e=>setSharePointUrl(e.target.value)} placeholder="https://firma.sharepoint.com/sites/lernen"/></label><small>Microsoft fragt zusätzlich Leserechte für Websites an. Schreibzugriff wird für den App-Ordner verwendet.</small><button disabled={busy||!msClientId.trim()||!sharePointUrl.trim()} onClick={()=>void authorizeMicrosoft(sharePointUrl)}>Verbinden</button></div>
   </div>
-  {config.microsoftClientId&&<details className="settings-secondary"><summary>OneDrive</summary><button onClick={()=>startLogin('microsoft',config).catch(e=>setError(e.message))}>OneDrive verbinden</button></details>}
+  {!msClientId.trim()&&<p className="cloud-setup-note">Die Microsoft-Anmeldung muss einmal eingerichtet werden.</p>}
+  <details className="settings-secondary"><summary>Microsoft-Anmeldung einrichten</summary><label>Anwendungs-ID (Client-ID)<input value={msClientId} onChange={e=>setMsClientId(e.target.value.trim())} placeholder="Microsoft-Entra-Anwendungs-ID"/></label><p className="muted">Öffentliche ID einer Entra-SPA für private und geschäftliche Konten. Kein Client-Secret eingeben.</p></details>
+  {connection&&<div className="action-row"><button disabled={syncing||busy} onClick={()=>void sync()}>{syncing?'Synchronisiere …':'Jetzt synchronisieren'}</button><button disabled={busy} onClick={disconnectCloud}>Verbindung trennen</button></div>}
  </div>
  <div className="setting-group">
-  <div className="settings-title"><h2>KI-Erkennung</h2><Help text="Für die Fotoanalyse wird dein eigener OpenAI-API-Key verwendet. Wenn du «Auf Gerät behalten» aktivierst, liegt er unverschlüsselt im Browser-Speicher und kann bei Zugriff auf dieses Browserprofil ausgelesen werden. Verwende einen separaten Schlüssel mit Budgetlimit."/></div>
+  <div className="settings-title"><h2>KI-Erkennung</h2><Help text="Für die Fotoanalyse wird dein eigener OpenAI-API-Key verwendet. Der Schlüssel bleibt nur bis zum Neuladen im Arbeitsspeicher. Ein eingegebener Schlüssel ist für Browser-Skripte zugänglich; für stärkeren Schutz ist eine geschützte serverseitige Ablage erforderlich."/></div>
   <label htmlFor="openai-key">OpenAI-API-Key</label>
   <div className="key-field">
    <input id="openai-key" type="password" autoComplete="off" spellCheck={false} placeholder="sk-…" value={aiKey} onChange={e=>setAiKey(e.target.value.trim())}/>
-   <button type="button" className="key-delete" aria-label="Gespeicherten API-Key löschen" title="API-Key löschen" disabled={!aiKey} onClick={()=>{setAiKey('');setRememberAiKey(false);sessionStorage.removeItem(API_SESSION);localStorage.removeItem(API_LOCAL)}}><UiIcon kind="trash"/></button>
+   <button type="button" className="key-delete" aria-label="Gespeicherten API-Key löschen" title="API-Key löschen" disabled={!aiKey} onClick={()=>{setAiKey('');sessionStorage.removeItem(API_SESSION);localStorage.removeItem(API_LOCAL)}}><UiIcon kind="trash"/></button>
   </div>
   <div className="ai-preferences">
    <label className="model-choice">Modell<select value={aiModel} onChange={e=>setAiModel(e.target.value)}>
     <option value="gpt-4.1-mini">GPT-4.1 mini</option><option value="gpt-4o-mini">GPT-4o mini</option><option value="gpt-4.1">GPT-4.1</option><option value="gpt-4o">GPT-4o</option>
    </select></label>
-   <label className="key-persistence"><input type="checkbox" checked={rememberAiKey} onChange={e=>setRememberAiKey(e.target.checked)}/><span>API-Key auf diesem Gerät speichern</span></label>
+   <p className="key-memory-note">Nur bis zum Neuladen · wird nicht dauerhaft auf diesem Gerät gespeichert.</p>
   </div>
  </div>
  <div className="setting-group">
@@ -329,7 +335,7 @@ function App(){
   <label>Muttersprache<input value={nativeLanguage} onChange={e=>setNativeLanguage(e.target.value)} placeholder="z. B. Deutsch"/></label>
  </div>
  <details className="settings-secondary"><summary>Erweitert & Backup</summary>
-  <label>Eigener KI-Dienst (optional) <Help text="Die Adresse ersetzt ausschliesslich den Dienst für den Fotoimport. Der Server muss POST /api/extract unterstützen, dieselbe Antwortstruktur liefern und Anfragen dieser Website über CORS erlauben. Google-Login und Synchronisation bleiben beim Open-Learning-Anmeldedienst. Ohne eigene URL gilt der Standarddienst."/></label>
+  <label>Eigener KI-Dienst (optional) <Help text="Die Adresse ersetzt ausschliesslich den Dienst für den Fotoimport. Der eingegebene API-Schlüssel wird an diesen Dienst gesendet. Der Server muss POST /api/extract unterstützen, dieselbe Antwortstruktur liefern und Anfragen dieser Website über CORS erlauben. Google-Login und Synchronisation bleiben beim Open-Learning-Anmeldedienst. Ohne eigene URL gilt der Standarddienst."/></label>
   <div className="worker-url-row"><input type="url" aria-label="Adresse des eigenen KI-Dienstes" autoComplete="off" spellCheck={false} placeholder="https://mein-worker.workers.dev" value={workerOverride} onChange={e=>{const v=e.target.value.trim();setWorkerOverride(v);if(v)localStorage.setItem('ol-ai-worker-override',v);else localStorage.removeItem('ol-ai-worker-override')}}/>{workerOverride&&<button type="button" onClick={()=>{setWorkerOverride('');localStorage.removeItem('ol-ai-worker-override')}}>Standard</button>}</div>
   <div className="action-row"><button onClick={()=>download('open-learning-backup.json',JSON.stringify(lib,null,2))}>Backup exportieren</button><label className="backup-import">Backup importieren<input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)restore(f)}}/></label></div>
   <Help text="Backups enthalten deine Fächer, Lernsets und Lernversuche, aber keine Anmeldetokens oder KI-API-Keys. Der Import führt vorhandene Daten zusammen."/>

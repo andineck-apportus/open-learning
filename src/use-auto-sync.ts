@@ -1,3 +1,4 @@
+import {microsoftAccessToken} from './microsoft-session';
 import {useEffect,useRef,useState} from 'react';
 import {canonical,mergeLibraries,stampChanges,type Library} from './model';
 import {loadLocal,saveLocal} from './local';
@@ -25,18 +26,17 @@ export function useAutoSync(connection:Connection|null){
   if(running.current)return running.current;
   if(paused.current||!current.current||!conn.current)return;
   if(!navigator.onLine){setStatus('Offline – Änderungen bleiben auf diesem Gerät');return;}
-  if(conn.current.provider!=='google'){setStatus('Automatische Synchronisation benötigt Google Drive');return;}
-  const epoch=generation.current;const valid=()=>alive.current&&!paused.current&&epoch===generation.current&&conn.current?.provider==='google';
+  const epoch=generation.current,started=conn.current;const valid=()=>alive.current&&!paused.current&&epoch===generation.current&&conn.current===started;
   const run=async()=>{
    if(!valid())return;setSyncing(true);setStatus('Synchronisiert …');
    try{
     await persistQueue.current;
     const disk=await loadLocal();apply(disk);
-    const token=await googleAccessToken();if(!valid())return;
-    const c:Connection={provider:'google',token};
+    const token=started.provider==='google'?await googleAccessToken():await microsoftAccessToken(started);if(!valid())return;
+    const c:Connection={...started,token};
     const remote=await readReplicas(c,device.current);if(!valid())return;
     const merged=remote.data?mergeLibraries(current.current!,remote.data):current.current!;
-    await persist(merged);if(!valid()||!hasGoogleSession())return;
+    await persist(merged);if(!valid()||started.provider==='google'&&!hasGoogleSession())return;
     // Edits made while downloading/saving must be included; edits during upload remain pending.
     const payload=current.current!;
     if(!remote.data||canonical(payload)!==canonical(mergeLibraries(remote.data,remote.data))){
@@ -48,9 +48,9 @@ export function useAutoSync(connection:Connection|null){
     else{setStatus('Weitere Änderungen werden synchronisiert …');schedule(500)}
    }catch(e){
     if(!valid())return;
-    const auth=e instanceof CloudError&&(e.status===401||e.status===403)||!hasGoogleSession();
+    const auth=e instanceof CloudError&&(e.status===401||e.status===403)||started.provider==='google'&&!hasGoogleSession();
     const wait=Math.min(60000,2000*2**Math.min(failures.current++,5))+Math.random()*1000;retryAt.current=Date.now()+wait;
-    setStatus(auth?'Google-Zugriff erneuern – Änderungen bleiben lokal':'Synchronisation unterbrochen – automatischer Neuversuch');
+    setStatus(auth?'Cloud-Zugriff erneuern – Änderungen bleiben lokal':'Synchronisation unterbrochen – automatischer Neuversuch');
     setError(e instanceof Error?e.message:String(e));
     if(!auth)schedule(wait);
    }finally{if(alive.current)setSyncing(false)}
@@ -72,6 +72,6 @@ export function useAutoSync(connection:Connection|null){
   window.addEventListener('online',wake);window.addEventListener('offline',offline);window.addEventListener('focus',wake);document.addEventListener('visibilitychange',wake);window.addEventListener('beforeunload',beforeUnload);
   return()=>{alive.current=false;generation.current++;clearTimeout(timer.current);clearTimeout(localRetry.current);clearInterval(interval);channel.current?.close();window.removeEventListener('online',wake);window.removeEventListener('offline',offline);window.removeEventListener('focus',wake);document.removeEventListener('visibilitychange',wake);window.removeEventListener('beforeunload',beforeUnload)};
  },[]);
- useEffect(()=>{generation.current++;paused.current=false;clearReplicaCache();failures.current=0;retryAt.current=0;if(connection)schedule(0);else{clearTimeout(timer.current);setStatus('Nur auf diesem Gerät gespeichert')}},[connection?.provider]);
+ useEffect(()=>{generation.current++;paused.current=false;clearReplicaCache();failures.current=0;retryAt.current=0;if(connection)schedule(0);else{clearTimeout(timer.current);setStatus('Nur auf diesem Gerät gespeichert')}},[connection]);
  return {lib,modify,sync,pause,status,syncing,syncError:error};
 }

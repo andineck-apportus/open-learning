@@ -10,14 +10,15 @@
     "dev:ai": "node server/index.mjs"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.27.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
-    "vite": "^7.0.0",
-    "typescript": "^5.8.0",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.0.0"
   }
 }

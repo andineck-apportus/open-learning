@@ -4,7 +4,7 @@ export const modes:[Mode,string,string][]=[['flip','Lernkarten','Aufdecken und s
 export function shuffled<T>(values:T[]):T[]{const out=[...values];for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out}
 export function accepts(answer:string,expected:string,alternatives:string[]=[]){return [...possibleAnswers(expected),...alternatives].some(x=>normalize(x)===normalize(answer))}
 export function progressFor(attempts:Attempt[],setId:string,itemId:string,direction:Attempt['direction'],now=Date.now()){
- const history=attempts.filter(a=>a.setId===setId&&a.itemId===itemId&&a.direction===direction&&a.practiceMode!=='listen').sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+ const history=attempts.filter(a=>a.setId===setId&&a.itemId===itemId&&a.direction===direction&&a.practiceMode!=='listen'&&a.practiceMode!=='memory').sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
  let level=0;for(const a of history)level=a.correct&&a.attempts===1?Math.min(5,level+1):0;
  const last=history.at(-1);const days=[0,1,3,7,14,30][level];
  return {level,due:!last||now>=Date.parse(last.createdAt)+days*86400000};
@@ -19,3 +19,10 @@ export function learningLevels(set:{id:string;items:{id:string;kind:string}[]},a
  return set.items.map(item=>progressFor(attempts,set.id,item.id,item.kind==='qa'?'front-back':direction).level);
 }
 export function levelCounts(levels:number[]){return [0,1,2,3,4,5].map(level=>levels.filter(value=>value===level).length)}
+
+/** Dictation always speaks the foreign side, independently of translation direction. */
+export function listeningDirection(labels:[string,string],nativeLanguage='Deutsch'):'front-back'|'back-front'{
+ const nativeCode=languageCode(nativeLanguage)?.split('-')[0];
+ const isNative=(label:string)=>nativeCode?languageCode(label)?.split('-')[0]===nativeCode:label.trim().toLocaleLowerCase()===nativeLanguage.trim().toLocaleLowerCase();
+ return isNative(labels[0])&&!isNative(labels[1])?'back-front':'front-back';
+}

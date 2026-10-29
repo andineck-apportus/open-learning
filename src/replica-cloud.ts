@@ -1,16 +1,19 @@
+import {readMicrosoftReplicas,writeMicrosoftReplica,clearMicrosoftCache} from './microsoft-graph';
+import {CloudError} from './cloud-errors';
+export {CloudError} from './cloud-errors';
 import {mergeLibraries,validLibrary,type Library} from './model';
 import type {Connection} from './cloud';
 const root='https://www.googleapis.com/drive/v3/files';
 const prefix='open-learning-replica-v2-';
 const cache=new Map<string,{version:string;data:Library}>();
-export class CloudError extends Error {status:number;constructor(status:number){super(status===401?'Google-Zugriff erneuern':status===403?'Google Drive verweigert den Zugriff':'Cloud nicht erreichbar ('+status+')');this.status=status}}
+
 async function request(url:string,token:string,init:RequestInit={}) {
  const r=await fetch(url,{...init,cache:'no-store',signal:AbortSignal.timeout(25000),headers:{Authorization:'Bearer '+token,...init.headers}});
  if(!r.ok)throw new CloudError(r.status);return r;
 }
-export function clearReplicaCache(){cache.clear()}
+export function clearReplicaCache(){cache.clear();clearMicrosoftCache()}
 export async function readReplicas(c:Connection,device:string):Promise<{data:Library|null;ownId?:string}> {
- if(c.provider!=='google')throw Error('Automatische Synchronisation ist für Google Drive eingerichtet.');
+ if(c.provider==='microsoft')return readMicrosoftReplicas(c,device);
  const files:{id:string;name:string;version:string}[]=[];let page='';
  do {
   const q=new URLSearchParams({spaces:'appDataFolder',pageSize:'1000',fields:'files(id,name,version),nextPageToken,incompleteSearch',q:"trashed = false and (name = 'open-learning.json' or name contains 'open-learning-replica-v2-')",...(page?{pageToken:page}:{})});
@@ -35,6 +38,7 @@ export async function readReplicas(c:Connection,device:string):Promise<{data:Lib
 // Only this browser's replica is written. Other devices' files are never overwritten.
 // The caller holds a cross-tab Web Lock throughout read/merge/write.
 export async function writeReplica(c:Connection,device:string,data:Library,ownId?:string):Promise<void> {
+ if(c.provider==='microsoft')return writeMicrosoftReplica(c,device,data,ownId);
  const body=JSON.stringify(data);
  if(ownId){
   await request('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(ownId)+'?uploadType=media',c.token,{method:'PATCH',headers:{'Content-Type':'application/json'},body});

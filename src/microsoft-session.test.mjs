@@ -1,0 +1,20 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {build} from 'esbuild';import {fileURLToPath} from 'node:url';
+const bundled=await build({entryPoints:[fileURLToPath(new URL('./microsoft-session.ts',import.meta.url))],bundle:true,platform:'node',format:'esm',write:false,define:{'import.meta.env.VITE_MICROSOFT_CLIENT_ID':JSON.stringify('11111111-2222-3333-4444-555555555555')},plugins:[{name:'msal-fixture',setup(b){b.onResolve({filter:/^@azure\/msal-browser$/},()=>({path:'msal',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:`export const BrowserCacheLocation={SessionStorage:'sessionStorage'};export class InteractionRequiredAuthError extends Error{};export class PublicClientApplication {constructor(config){globalThis.msFixture.config=config}async initialize(){}async handleRedirectPromise(){return null}getActiveAccount(){return globalThis.msFixture.account}getAllAccounts(){return globalThis.msFixture.accounts||(globalThis.msFixture.account?[globalThis.msFixture.account]:[])}setActiveAccount(a){globalThis.msFixture.account=a}async acquireTokenRedirect(request){globalThis.msFixture.redirect=request;if(globalThis.msFixture.failRedirect)throw Error('Canceled')}async acquireTokenSilent(request){globalThis.msFixture.silent=request;return {accessToken:'test-token'}}async clearCache(){globalThis.msFixture.account=null}}`}))}}]});
+let serial=0;
+async function setup(){const original={localStorage:global.localStorage,sessionStorage:global.sessionStorage,location:global.location,fetch:global.fetch};const local=new Map([['ol-last-cloud-provider','microsoft']]),session=new Map();const storage=map=>({getItem:k=>map.get(k)||null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k)});global.localStorage=storage(local);global.sessionStorage=storage(session);global.location={origin:'https://app.example',pathname:'/open-learning/'};const f=global.msFixture={account:{homeAccountId:'account'}};global.fetch=async()=>Response.json({id:'site-id'});const api=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text+'\n//'+serial++).toString('base64'));return {api,f,local,session,stop(){Object.assign(global,original);delete global.msFixture}}}
+test('Microsoft renews access for the selected account and only requests SharePoint scope when needed',async()=>{
+ const {api,f,stop}=await setup();try{await api.beginMicrosoftLogin();assert.deepEqual(f.redirect.scopes,['Files.ReadWrite.AppFolder']);const c=await api.finishMicrosoftLogin();assert.equal(c.accountId,'account');assert.equal(c.siteId,undefined);assert.equal(f.config.cache.cacheLocation,'sessionStorage');
+  await api.beginMicrosoftLogin('https://school.sharepoint.com/sites/lernen');assert.deepEqual(f.redirect.scopes,['Files.ReadWrite.AppFolder','Sites.Read.All']);const share=await api.finishMicrosoftLogin();assert.equal(share.siteId,'site-id');assert.equal(await api.microsoftAccessToken(share),'test-token');
+  await assert.rejects(api.microsoftAccessToken({...share,accountId:'another-user'}),e=>e.status===401);
+ }finally{stop()}
+});
+test('cancelled Microsoft redirect restores the previously selected provider',async()=>{
+ const {api,f,local,stop}=await setup();try{local.set('ol-last-cloud-provider','google');f.failRedirect=true;await assert.rejects(api.beginMicrosoftLogin());assert.equal(local.get('ol-last-cloud-provider'),'google')}finally{stop()}
+});
+test('disconnect removes this app session and validates public client IDs',async()=>{
+ const {api,local,session,stop}=await setup();try{await api.finishMicrosoftLogin();await api.disconnectMicrosoft();assert.equal(local.has('ol-last-cloud-provider'),false);assert.equal(session.has('ol-microsoft-target'),false);assert.throws(()=>api.saveMicrosoftClientId('not-a-guid'));}finally{stop()}
+});
+
+test('multiple cached Microsoft accounts require an explicit selection instead of guessing',async()=>{
+ const {api,f,stop}=await setup();try{f.account=null;f.accounts=[{homeAccountId:'first'},{homeAccountId:'second'}];assert.equal(await api.finishMicrosoftLogin(),null);assert.equal(f.silent,undefined)}finally{stop()}
+});
