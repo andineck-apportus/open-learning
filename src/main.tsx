@@ -15,6 +15,7 @@ const GSESSION='ol-google-session',LAST_PROVIDER='ol-last-cloud-provider';
 const download=(filename:string,data:string)=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.href=u;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 function App(){
  const [tab,setTab]=useState<'home'|'subject'|'subject-edit'|'set'|'edit'|'settings'|'import'>('home');
+ const settingsReturn=useRef<typeof tab>('home');
  const [selected,setSelected]=useState('unite2'),[selectedSubject,setSelectedSubject]=useState('french');
  const [connection,setConnection]=useState<Connection|null>(null);
  const {lib,modify,sync,pause:pauseSync,status:syncStatus,syncing,syncError}=useAutoSync(connection);
@@ -89,6 +90,7 @@ function App(){
  useEffect(()=>{if(currentSet)chooseSetDirection(currentSet)},[currentSet?.id,currentSet?.frontLanguage,currentSet?.backLanguage,nativeLanguage]);
  function openSubject(id:string){setSelectedSubject(id);setTab('subject');setNotice('')}
  function openSet(id:string){setSelected(id);const matching=sets.find(x=>x.id===id);if(matching){setSelectedSubject(matching.subjectId);chooseSetDirection(matching)}setTab('set');setNotice('')}
+ function openSettings(){if(tab!=='settings')settingsReturn.current=tab;setTab('settings')}
  function openImport(){const id=(tab==='subject'||tab==='subject-edit')?activeSubject?.id||'':currentSet?.subjectId||activeSubject?.id||'';setTargetSubject(id);setImportSubjectChoice(id||'__new__');setImportDestination('__new__');setTab('import')}
  const subjectIcon=(name:string)=>/franz/i.test(name)?'🇫🇷':/engl/i.test(name)?'🇬🇧':/geschicht/i.test(name)?'🏛️':/bio/i.test(name)?'🌱':/geo/i.test(name)?'🌍':/mathe/i.test(name)?'∑':'📚';
  function updateSet(fn:(s:SetData)=>SetData){if(!currentSet)return;modify(d=>({...d,sets:d.sets.map(s=>s.id===currentSet.id?{...fn(s),updatedAt:new Date().toISOString()}:s)}))}
@@ -206,7 +208,7 @@ function App(){
   </button>
   <div className="header-tools"><SyncBadge status={syncStatus} connected={!!connection} syncing={syncing} error={syncError}/>
 
-  <button className={'header-settings '+(tab==='settings'?'active':'')} aria-label="Einstellungen" title="Einstellungen" onClick={()=>setTab(tab==='settings'?'home':'settings')}><UiIcon kind="settings"/></button></div>
+  <button className={'header-settings '+(tab==='settings'?'active':'')} aria-label="Einstellungen" title="Einstellungen" onClick={()=>tab==='settings'?setTab(settingsReturn.current):openSettings()}><UiIcon kind="settings"/></button></div>
  </header>
   {error&&<div role="alert" className="error"><span>{error}</span><button onClick={()=>setError('')}>Schliessen</button></div>}{notice&&<p className="muted" role="status">{notice}</p>}
  {tab==='home'&&<div className="page-stack">
@@ -238,7 +240,7 @@ function App(){
   </section>
  </div>}
  {tab==='set'&&currentSet&&<div className="page-stack">
-  <div className="breadcrumb"><button onClick={()=>setTab('home')}>Fächer</button><span>›</span><button onClick={()=>openSubject(currentSet.subjectId)}>{subject?.name}</button></div>
+  <div className="breadcrumb"><button onClick={()=>setTab('home')}>Fächer</button><span>›</span><button onClick={()=>openSubject(currentSet.subjectId)}>{subject?.name}</button><span>›</span><strong aria-current="page">{currentSet.title}</strong></div>
   <section className="focus-panel set-detail">
    <div className="flat-toolbar set-title-row"><div><h1>{currentSet.title}</h1><p className="muted">{currentSet.items.length} Karten</p></div>
     <button className="subtle-button" onClick={()=>setTab('edit')}><UiIcon kind="edit"/> Bearbeiten</button></div>
@@ -276,7 +278,7 @@ function App(){
    {importStage==='analyzing'&&<div className="loading-line" role="status">Foto wird analysiert …</div>}
   </div>
   {image&&importStage==='photo'&&<button className="primary" disabled={busy||!aiKey} onClick={()=>void extractWithAI()}>Erneut analysieren</button>}
-  {!aiKey&&<div className="hint">Für automatische KI-Erkennung bitte zuerst unter <button onClick={()=>setTab('settings')}>Einstellungen → KI-Verbindung</button> einen OpenAI-API-Key eingeben.</div>}
+  {!aiKey&&<div className="hint">Für automatische KI-Erkennung bitte zuerst unter <button onClick={openSettings}>Einstellungen → KI-Verbindung</button> einen OpenAI-API-Key eingeben.</div>}
   <details className="import-fallback"><summary>Alternativ Text importieren oder OCR verwenden</summary>
    <label>Vokabelpaare: eine Zeile pro Karte, getrennt durch Semikolon
     <textarea rows={5} value={importText} onChange={e=>setImportText(e.target.value)} placeholder={'bonjour;Guten Tag\nmerci;Danke'}/>
@@ -307,7 +309,7 @@ function App(){
  </section>}
 
  {tab==='settings'&&<section className="compact-settings">
- <div className="settings-heading"><button className="icon-button" onClick={()=>setTab('home')} aria-label="Zurück"><UiIcon kind="back"/></button><h1>Einstellungen</h1></div>
+ <div className="settings-heading"><button className="icon-button" onClick={()=>setTab(settingsReturn.current)} aria-label="Zurück"><UiIcon kind="back"/></button><h1>Einstellungen</h1></div>
  <div className="setting-group">
   <div className="settings-title"><h2>Speicher & Synchronisierung</h2><Help text="Lernkarten und Fortschritt werden zuerst lokal gespeichert und mit dem verbundenen Speicher automatisch abgeglichen. Microsoft verwendet einen eigenen App-Ordner und getrennte Datenstände pro Konto."/></div>
   <p className="setting-status">{connection?.provider==='google'?'Google Drive verbunden':connection?.provider==='microsoft'?(connection.siteId?'SharePoint verbunden':'OneDrive verbunden'):cloudState}</p>
