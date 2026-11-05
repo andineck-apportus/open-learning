@@ -9,7 +9,7 @@ function offlineShell(): Plugin {
     enforce: 'post',
     generateBundle(_, bundle) {
       const files = Object.keys(bundle).filter(name => name !== 'offline-worker.js');
-      const publicFiles = ['manifest.webmanifest', 'icons/logo.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
+      const publicFiles = ['manifest.webmanifest', 'icons/logo.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png', 'icons/apple-touch-icon.png'];
       const precache = [...new Set(['index.html', ...files, ...publicFiles])].map(name => './' + name);
       const fingerprint = createHash('sha256');
       for (const name of files.sort()) {
