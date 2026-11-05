@@ -598,6 +598,9 @@ body:has(.practice-study) .compact-app-header,body:has(.practice-study) .breadcr
 .practice-study .round-caption,.practice-study .round-legend,.practice-study .round-test-caption{display:none}
 .study-question{display:flex;gap:10px;align-items:center;justify-content:center;width:100%;min-width:0}
 .study-question h1{margin:0;font-size:clamp(23px,4vw,34px)}
+.writing-mode .study-question{display:grid;grid-template-columns:40px minmax(0,1fr) 40px}
+.writing-mode .study-question h1{grid-column:2;text-align:center;overflow-wrap:anywhere}
+.writing-mode .study-question .study-speak{grid-column:3}
 .practice-study .study-speak{flex:0 0 40px;min-height:40px;padding:8px;background:transparent}
 .study-feedback{display:grid;gap:8px;justify-items:center;width:100%;padding:10px;font-size:14px;line-height:1.5;border-radius:10px}
 .study-feedback p{margin:0;overflow-wrap:anywhere;max-width:100%}

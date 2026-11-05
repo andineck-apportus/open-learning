@@ -6,9 +6,9 @@ Diese Architektur ist noch nicht als produktiver Schlüsseltresor implementiert.
 ## Aktueller Stand
 
 Die Fotoerkennung unterstützt derzeit nur OpenAI. Ein eingegebener Schlüssel
-bleibt im Browser-Arbeitsspeicher und wird für die Anfrage über HTTPS an den
-KI-Dienst gesendet. Frühere Kopien in localStorage/sessionStorage werden beim
-Start entfernt. Es gibt keine Option zur dauerhaften Browserablage mehr.
+bleibt in der Sitzung des Browser-Tabs (sessionStorage) und übersteht ein
+Neuladen. Die App sendet ihn für die Anfrage über HTTPS an den KI-Dienst.
+Frühere Kopien im dauerhaften localStorage werden beim Start entfernt.
 Ein beliebiger HTTP-Dienst ausserhalb der lokalen Entwicklung wird abgewiesen.
 Das verringert die Persistenz, schützt aber nicht vor manipuliertem JavaScript,
 Browsererweiterungen oder einem kompromittierten Dienst. CORS ist keine Anmeldung.

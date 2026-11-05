@@ -1,4 +1,4 @@
-import {takeLegacyAiKey,extractionEndpoint} from './ai-key';
+import {loadAiKey,saveAiKey,extractionEndpoint} from './ai-key';
 import {SyncBadge} from './SyncBadge';
 import {beginMicrosoftLogin,finishMicrosoftLogin,disconnectMicrosoft,microsoftClientId,saveMicrosoftClientId} from './microsoft-session';
 import {LearningProgress} from './LearningProgress';
@@ -11,7 +11,7 @@ import { recognizeImage, pairCandidates } from './ocr';
 import {beginGoogleLogin,finishGoogleLogin,hasGoogleSession,disconnectGoogle} from './google-session';
 type ManageAction={kind:'subject'|'set';mode:'create'|'rename'|'delete';id?:string;name:string};
 type Task={item:Item;setId:string;direction:'front-back'|'back-front'};
-const GSESSION='ol-google-session',API_SESSION='ol-api-session',API_LOCAL='ol-api-remembered',API_REMEMBER='ol-api-persist',LAST_PROVIDER='ol-last-cloud-provider';
+const GSESSION='ol-google-session',LAST_PROVIDER='ol-last-cloud-provider';
 const download=(filename:string,data:string)=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.href=u;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 function App(){
  const [tab,setTab]=useState<'home'|'subject'|'subject-edit'|'set'|'edit'|'settings'|'import'>('home');
@@ -39,10 +39,14 @@ function App(){
  const [workerOverride,setWorkerOverride]=useState(()=>localStorage.getItem('ol-ai-worker-override')||'');
  const workerUrl=workerOverride||configuredWorker;
 
- const [aiKey,setAiKey]=useState(takeLegacyAiKey),[aiModel,setAiModel]=useState('gpt-4.1-mini');
+ const [aiKey,setAiKey]=useState(loadAiKey),[aiModel,setAiModel]=useState('gpt-4.1-mini');
+ function updateAiKey(key: string) {
+  setAiKey(key);
+  saveAiKey(key);
+ }
  const [aiMode,setAiMode]=useState<'auto'|'translation'|'qa'>('auto');
 
- useEffect(()=>{localStorage.removeItem(API_LOCAL);sessionStorage.removeItem(API_SESSION);localStorage.removeItem(API_REMEMBER)},[]);
+
  useEffect(()=>{
   let active=true;
   (async()=>{
@@ -317,17 +321,17 @@ function App(){
   {connection&&<div className="action-row"><button disabled={syncing||busy} onClick={()=>void sync()}>{syncing?'Synchronisiere …':'Jetzt synchronisieren'}</button><button disabled={busy} onClick={disconnectCloud}>Verbindung trennen</button></div>}
  </div>
  <div className="setting-group">
-  <div className="settings-title"><h2>KI-Erkennung</h2><Help text="Für die Fotoanalyse wird dein eigener OpenAI-API-Key verwendet. Der Schlüssel bleibt nur bis zum Neuladen im Arbeitsspeicher. Ein eingegebener Schlüssel ist für Browser-Skripte zugänglich; für stärkeren Schutz ist eine geschützte serverseitige Ablage erforderlich."/></div>
+  <div className="settings-title"><h2>KI-Erkennung</h2><Help text="Für die Fotoanalyse wird dein eigener OpenAI-API-Key verwendet. Der Schlüssel wird für die Sitzung dieses Tabs gespeichert und bleibt beim Neuladen verfügbar. Browser-Skripte können auf den eingegebenen Schlüssel zugreifen."/></div>
   <label htmlFor="openai-key">OpenAI-API-Key</label>
   <div className="key-field">
-   <input id="openai-key" type="password" autoComplete="off" spellCheck={false} placeholder="sk-…" value={aiKey} onChange={e=>setAiKey(e.target.value.trim())}/>
-   <button type="button" className="key-delete" aria-label="Gespeicherten API-Key löschen" title="API-Key löschen" disabled={!aiKey} onClick={()=>{setAiKey('');sessionStorage.removeItem(API_SESSION);localStorage.removeItem(API_LOCAL)}}><UiIcon kind="trash"/></button>
+   <input id="openai-key" type="password" autoComplete="off" spellCheck={false} placeholder="sk-…" value={aiKey} onChange={e=>updateAiKey(e.target.value.trim())}/>
+   <button type="button" className="key-delete" aria-label="Gespeicherten API-Key löschen" title="API-Key löschen" disabled={!aiKey} onClick={()=>updateAiKey('')}><UiIcon kind="trash"/></button>
   </div>
   <div className="ai-preferences">
    <label className="model-choice">Modell<select value={aiModel} onChange={e=>setAiModel(e.target.value)}>
     <option value="gpt-4.1-mini">GPT-4.1 mini</option><option value="gpt-4o-mini">GPT-4o mini</option><option value="gpt-4.1">GPT-4.1</option><option value="gpt-4o">GPT-4o</option>
    </select></label>
-   <p className="key-memory-note">Nur bis zum Neuladen · wird nicht dauerhaft auf diesem Gerät gespeichert.</p>
+   <p className="key-memory-note">Bleibt beim Neuladen in diesem Tab erhalten. Über das Papierkorb-Symbol kannst du ihn löschen.</p>
   </div>
  </div>
  <div className="setting-group">
