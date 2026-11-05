@@ -129,6 +129,7 @@ function App(){
  }
  async function extractWithAI(photoUrl=image){
   if(!photoUrl){setImportStage('photo');setImportStatus('Bitte zuerst ein Foto auswählen.');return}
+  if(!navigator.onLine){setImportStage('photo');setImportStatus('Für die KI-Erkennung bitte mit dem Internet verbinden. Das Foto bleibt ausgewählt.');return}
   if(!workerUrl||!aiKey){setImportStage('photo');setImportStatus('Für die automatische Erkennung zuerst unter Einstellungen den OpenAI-API-Key eingeben. Das Foto bleibt ausgewählt.');return}
   setBusy(true);setImportStage('analyzing');
   try{
@@ -385,3 +386,11 @@ function UiIcon({kind}:{kind:'home'|'camera'|'settings'|'book'|'chevron'|'back'|
 function SetPicker({sets,selected,setSelected}:{sets:SetData[];selected:string;setSelected:(s:string)=>void}){return <label>Lernset <select value={selected} onChange={e=>setSelected(e.target.value)}>{sets.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select></label>}
 createRoot(document.getElementById('root')!).render(<App/>);
 
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+ window.addEventListener('load', () => {
+  void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}offline-worker.js`).catch(() => {
+   console.warn('Offline-Modus konnte nicht eingerichtet werden.');
+  });
+ });
+}

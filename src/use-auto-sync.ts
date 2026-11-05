@@ -20,7 +20,7 @@ export function useAutoSync(connection:Connection|null){
  }
  function modify(fn:(d:Library)=>Library){
   if(!current.current)return;const next=stampChanges(current.current,fn(current.current));current.current=next;setLib(next);setStatus('Wird lokal gespeichert …');
-  void persist(next).then(()=>{if(!running.current)setStatus(conn.current?'Änderungen warten auf Synchronisation':'Nur auf diesem Gerät gespeichert');schedule()}).catch(()=>{});
+  void persist(next).then(()=>{if(!running.current)setStatus(!navigator.onLine?'Offline – Änderungen bleiben auf diesem Gerät':conn.current?'Änderungen warten auf Synchronisation':'Nur auf diesem Gerät gespeichert');schedule()}).catch(()=>{});
  }
  async function sync(){
   if(running.current)return running.current;
@@ -63,15 +63,15 @@ export function useAutoSync(connection:Connection|null){
   alive.current=true;
   // Without Web Locks use a separate replica per tab; never share an unprotected writer.
   if(navigator.locks){let id=localStorage.getItem('ol-sync-device-v2');if(!id){id=crypto.randomUUID();localStorage.setItem('ol-sync-device-v2',id)}device.current=id}else device.current=crypto.randomUUID();
-  loadLocal().then(data=>{if(alive.current){apply(data);lastSaved.current=canonical(data);setStatus('Auf diesem Gerät gespeichert');schedule(0)}}).catch(e=>setError(String(e)));
+  loadLocal().then(data=>{if(alive.current){apply(data);lastSaved.current=canonical(data);setStatus(navigator.onLine?'Auf diesem Gerät gespeichert':'Offline – Änderungen bleiben auf diesem Gerät');schedule(0)}}).catch(e=>setError(String(e)));
   if(typeof BroadcastChannel!=='undefined'){channel.current=new BroadcastChannel('ol-library-v2');channel.current.onmessage=()=>{void loadLocal().then(data=>{apply(data);schedule()}).catch(e=>setError(String(e)))}}
-  const wake=()=>{if(document.visibilityState==='visible'){retryAt.current=0;schedule(0)}};
+  const wake=()=>{if(document.visibilityState==='visible'){retryAt.current=0;if(navigator.onLine&&!conn.current)setStatus('Nur auf diesem Gerät gespeichert');schedule(0)}};
   const offline=()=>setStatus('Offline – Änderungen bleiben auf diesem Gerät');
   const beforeUnload=(e:BeforeUnloadEvent)=>{if(current.current&&canonical(current.current)!==lastSaved.current){e.preventDefault()}};
   const interval=setInterval(()=>{if(document.visibilityState==='visible'&&Date.now()>=retryAt.current)schedule(0)},30000);
   window.addEventListener('online',wake);window.addEventListener('offline',offline);window.addEventListener('focus',wake);document.addEventListener('visibilitychange',wake);window.addEventListener('beforeunload',beforeUnload);
   return()=>{alive.current=false;generation.current++;clearTimeout(timer.current);clearTimeout(localRetry.current);clearInterval(interval);channel.current?.close();window.removeEventListener('online',wake);window.removeEventListener('offline',offline);window.removeEventListener('focus',wake);document.removeEventListener('visibilitychange',wake);window.removeEventListener('beforeunload',beforeUnload)};
  },[]);
- useEffect(()=>{generation.current++;paused.current=false;clearReplicaCache();failures.current=0;retryAt.current=0;if(connection)schedule(0);else{clearTimeout(timer.current);setStatus('Nur auf diesem Gerät gespeichert')}},[connection]);
+ useEffect(()=>{generation.current++;paused.current=false;clearReplicaCache();failures.current=0;retryAt.current=0;if(connection)schedule(0);else{clearTimeout(timer.current);setStatus(navigator.onLine?'Nur auf diesem Gerät gespeichert':'Offline – Änderungen bleiben auf diesem Gerät')}},[connection]);
  return {lib,modify,sync,pause,status,syncing,syncError:error};
 }
