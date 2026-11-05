@@ -445,7 +445,7 @@ section,.content-panel,.focus-panel{padding:14px}
 .answer-composer{display:grid;gap:14px;min-width:0;width:100%}
 .answer-composer .answer-label{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0;text-align:left}
 .answer-label span{font-weight:400;color:#756c86;font-size:12px}
-.answer-composer>input{width:100%;min-height:52px;font-size:18px;line-height:1.4}
+.answer-composer>.answer-field input{width:100%;min-height:52px;font-size:18px;line-height:1.4}
 .answer-submit{width:100%;min-height:48px}
 .answer-keyboard{display:grid;gap:7px;width:100%;padding:12px 8px;background:#f0edf5;border:1px solid #e4dfec;border-radius:12px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .keyboard-caption{display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;line-height:1.5;color:#71687d;margin-bottom:5px}
@@ -623,7 +623,7 @@ body:has(.practice-study) .compact-app-header,body:has(.practice-study) .breadcr
  .writing-mode:has(.answer-keyboard) .study-prompt .subtle-button{font-size:11px;min-height:36px;padding:6px 8px}
  .writing-mode:has(.answer-keyboard) .learning-card>form{flex:0 0 auto;width:100%;max-width:none}
  .writing-mode .answer-composer{gap:8px}
- .writing-mode .answer-composer>input{width:calc(100% - 24px);margin:0 12px;min-height:44px;padding:8px 12px}
+ .writing-mode .answer-composer>.answer-field input{width:calc(100% - 24px);margin:0 12px;min-height:44px;padding:8px 12px}
  .writing-mode .answer-keyboard{width:100%;padding:6px 4px;gap:5px;border-inline:0;border-radius:0;margin:0}
  .writing-mode .keyboard-caption{display:none}
  .writing-mode .answer-submit{width:calc(100% - 24px);margin:0 12px;min-height:44px;padding:8px}
@@ -637,7 +637,7 @@ body:has(.practice-study) .compact-app-header,body:has(.practice-study) .breadcr
  .writing-mode:has(.answer-keyboard) .study-prompt{min-height:24px;padding-block:0;gap:4px}
  .writing-mode:has(.answer-keyboard) .study-prompt h1{font-size:20px}
  .writing-mode:has(.answer-keyboard) .answer-composer{grid-template-columns:minmax(0,1fr) auto;gap:5px}
- .writing-mode:has(.answer-keyboard) .answer-composer>input{grid-column:1;grid-row:1;min-height:36px}
+ .writing-mode:has(.answer-keyboard) .answer-composer>.answer-field input{grid-column:1;grid-row:1;min-height:36px}
  .writing-mode:has(.answer-keyboard) .answer-submit{grid-column:2;grid-row:1;font-size:12px;width:auto;min-height:36px;margin-left:0}
  .writing-mode:has(.answer-keyboard) .answer-keyboard{grid-column:1/-1;grid-row:2;gap:3px;padding-block:4px}
  .writing-mode:has(.answer-keyboard) button.keyboard-key{height:30px;min-height:30px;padding-block:0;line-height:1}
@@ -656,7 +656,7 @@ body:has(.practice-study) .compact-app-header,body:has(.practice-study) .breadcr
  .writing-mode:has(.answer-keyboard) .keyboard-settings-panel summary{min-height:20px;line-height:20px}
  .writing-mode:has(.answer-keyboard) .keyboard-accents{padding-bottom:2px}
  .writing-mode:has(.answer-keyboard) .answer-keyboard{padding-block:2px}
- .writing-mode:has(.answer-keyboard) .answer-composer>input,.writing-mode:has(.answer-keyboard) .answer-submit{min-height:32px;padding-block:4px;font-size:16px;line-height:1.2}
+ .writing-mode:has(.answer-keyboard) .answer-composer>.answer-field input,.writing-mode:has(.answer-keyboard) .answer-submit{min-height:32px;padding-block:4px;font-size:16px;line-height:1.2}
 }
 .practice-study>.flat-toolbar>span{white-space:nowrap}
 @media(max-height:550px) and (orientation:portrait){
@@ -666,3 +666,23 @@ body:has(.practice-study) .compact-app-header,body:has(.practice-study) .breadcr
  .writing-mode:has(.answer-keyboard) .study-prompt{min-height:36px;padding-block:4px}
  .writing-mode:has(.answer-keyboard) .study-prompt h1{font-size:19px}
 }
+
+.answer-field{position:relative;min-width:0}
+.answer-field input{width:100%}
+.answer-caret-clip{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.answer-caret-line{position:absolute;left:15px;top:50%;white-space:pre;font:inherit;font-size:18px;line-height:1.4}
+.answer-caret-line>span{visibility:hidden}
+.answer-caret-line i{display:inline-block;height:1.2em;width:2px;background:#7653e8;vertical-align:middle}
+@media(max-width:760px),(any-pointer:coarse){
+ .writing-mode:has(.answer-keyboard) .answer-composer{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ .writing-mode:has(.answer-keyboard) .answer-composer>.answer-field{grid-column:1;grid-row:1;width:auto;margin:0 0 0 12px;padding:0}
+ .writing-mode:has(.answer-keyboard) .answer-field input{min-height:44px;padding:8px 12px}
+ .writing-mode:has(.answer-keyboard) .answer-submit{grid-column:2;grid-row:1;width:auto;min-width:115px;margin:0 12px 0 0;padding:8px}
+ .writing-mode:has(.answer-keyboard) .answer-keyboard{grid-column:1/-1;grid-row:2}
+}
+@media(max-width:360px){.writing-mode:has(.answer-keyboard) .answer-submit{min-width:90px;font-size:12px;padding-inline:6px}}
+.breadcrumb{flex-wrap:wrap;line-height:1.5}
+.breadcrumb [aria-current=page]{color:#463e54;font-weight:700;overflow-wrap:anywhere}
+
+.custom-answer-field input{caret-color:transparent}
+@media(max-width:760px),(any-pointer:coarse){.writing-mode:has(.answer-keyboard) .answer-composer>.answer-field input{width:100%;margin:0}}
