@@ -618,7 +618,7 @@ body:has(.practice-study) .compact-app-header,body:has(.practice-study) .breadcr
  .writing-mode:has(.answer-keyboard)>.round-progress{flex-shrink:0;padding:0 12px}
  .writing-mode:has(.answer-keyboard) .round-track{height:4px}
  .writing-mode:has(.answer-keyboard) .learning-card{flex:1;min-height:0;padding:0;gap:8px;overflow:hidden;border:0;border-radius:0;background:white}
- .writing-mode:has(.answer-keyboard) .study-prompt{flex:1 1 auto;min-height:36px;overflow:auto;gap:8px;padding:8px 16px;justify-content:flex-start;overscroll-behavior:contain}
+ .writing-mode:has(.answer-keyboard) .study-prompt{flex:1 1 auto;min-height:36px;overflow:auto;gap:8px;padding:8px 16px;justify-content:safe center;overscroll-behavior:contain}
  .writing-mode:has(.answer-keyboard) .study-prompt h1{font-size:24px;line-height:1.25}
  .writing-mode:has(.answer-keyboard) .study-prompt .subtle-button{font-size:11px;min-height:36px;padding:6px 8px}
  .writing-mode:has(.answer-keyboard) .learning-card>form{flex:0 0 auto;width:100%;max-width:none}
